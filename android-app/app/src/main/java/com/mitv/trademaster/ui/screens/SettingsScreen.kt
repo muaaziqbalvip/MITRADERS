@@ -19,6 +19,7 @@ import com.mitv.trademaster.data.LicenseRepository
 import com.mitv.trademaster.ui.theme.*
 import kotlinx.coroutines.launch
 
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen() {
     val context = LocalContext.current
