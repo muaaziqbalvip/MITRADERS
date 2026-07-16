@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">MI Trade Master</string>
+    <string name="splash_tagline">چارٹ اینالیسس، آسان انداز میں</string>
+
+    <string name="license_title">اپنا لائسنس ایکٹیویٹ کریں</string>
+    <string name="license_subtitle">MI Trade Master کو استعمال کرنے کے لیے اپنی لائسنس کی درج کریں۔</string>
+    <string name="license_key_hint">MITV-XXXX-XXXX-XXXX</string>
+    <string name="license_activate_btn">ایکٹیویٹ کریں</string>
+    <string name="license_invalid">لائسنس کی غلط ہے یا میعاد ختم ہو چکی ہے</string>
+    <string name="license_no_key_help">کی نہیں ہے؟ لائسنس کے لیے MI Trade Master ٹیم سے رابطہ کریں۔</string>
+
+    <string name="nav_home">ہوم</string>
+    <string name="nav_analyzer">اینالائزر</string>
+    <string name="nav_learn">سیکھیں</string>
+    <string name="nav_account">اکاؤنٹ</string>
+    <string name="nav_settings">سیٹنگز</string>
+
+    <string name="home_welcome">خوش آمدید</string>
+    <string name="home_start_overlay">فلوٹنگ اینالائزر شروع کریں</string>
+    <string name="home_stop_overlay">فلوٹنگ اینالائزر بند کریں</string>
+    <string name="home_disclaimer_short">تعلیمی چارٹ تجزیہ — مالیاتی مشورہ نہیں</string>
+
+    <string name="analyzer_title">چارٹ اینالائزر</string>
+    <string name="analyzer_capture_btn">کیپچر اور تجزیہ کریں</string>
+    <string name="analyzer_mode_offline">آف لائن (ڈیوائس پر)</string>
+    <string name="analyzer_mode_online">آن لائن (ایڈوانسڈ)</string>
+    <string name="analyzer_direction_up">تیزی کا رجحان</string>
+    <string name="analyzer_direction_down">مندی کا رجحان</string>
+    <string name="analyzer_direction_neutral">غیر واضح رجحان</string>
+    <string name="analyzer_confidence">اعتماد کی سطح</string>
+    <string name="analyzer_disclaimer">یہ ایک تعلیمی مشاہدہ ہے، یقینی نتیجہ نہیں۔ ہمیشہ اپنا رسک خود مینج کریں۔</string>
+
+    <string name="overlay_toggle_active">آٹو ٹیپ</string>
+    <string name="overlay_toggle_hint">آن ہونے پر سگنل ملنے پر محفوظ شدہ جگہ پر ٹیپ ہوگا۔ آف ہونے پر صرف سگنل دکھایا جائے گا۔</string>
+
+    <string name="account_title">اکاؤنٹ</string>
+    <string name="account_license_key">لائسنس کی</string>
+    <string name="account_expires">میعاد ختم</string>
+    <string name="account_status_active">فعال</string>
+    <string name="account_status_expired">میعاد ختم</string>
+
+    <string name="settings_title">سیٹنگز</string>
+    <string name="settings_language">زبان</string>
+    <string name="settings_dot_size">بلبلے کا سائز</string>
+    <string name="settings_dot_position">بلبلے کی جگہ ری سیٹ کریں</string>
+    <string name="settings_logout">اس ڈیوائس پر لائسنس غیر فعال کریں</string>
+
+    <string name="learn_title">ٹریڈنگ سیکھیں</string>
+    <string name="learn_subtitle">چارٹ ریڈنگ، رسک مینجمنٹ اور حکمت عملی کے کورسز، اپنی رفتار سے۔</string>
+</resources>
