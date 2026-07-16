@@ -4,8 +4,11 @@ on:
   push:
     branches: [ "main" ]
     paths:
-      - '/**'
+      - 'android-app/**'
   workflow_dispatch: {}
+
+permissions:
+  contents: write
 
 jobs:
   build:
@@ -52,8 +55,27 @@ jobs:
         env:
           GRADLE_OPTS: "-Dorg.gradle.daemon=false"
 
+      - name: Rename APK with version + run number
+        run: |
+          mkdir -p app/build/outputs/apk/debug/release
+          cp app/build/outputs/apk/debug/app-debug.apk \
+             app/build/outputs/apk/debug/release/MI-Trade-Master-v1.0.${{ github.run_number }}.apk
+
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: mi-trade-master-debug-apk
-          path: android-app/app/build/outputs/apk/debug/app-debug.apk
+          name: mi-trade-master-apk
+          path: android-app/app/build/outputs/apk/debug/release/MI-Trade-Master-v1.0.${{ github.run_number }}.apk
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v1.0.${{ github.run_number }}
+          name: MI Trade Master v1.0.${{ github.run_number }}
+          body: |
+            Automated build from commit ${{ github.sha }}.
+
+            Install: download the APK below, allow "install from unknown sources" on your device, and open it.
+          files: android-app/app/build/outputs/apk/debug/release/MI-Trade-Master-v1.0.${{ github.run_number }}.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
