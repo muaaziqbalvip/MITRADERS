@@ -1,0 +1,11 @@
+package com.mitv.trademaster
+
+import android.app.Application
+import com.google.firebase.FirebaseApp
+
+class MiTradeMasterApp : Application() {
+    override fun onCreate() {
+        super.onCreate()
+        FirebaseApp.initializeApp(this)
+    }
+}

@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">MI Trade Master</string>
+    <string name="splash_tagline">تحليل الرسم البياني، ببساطة</string>
+
+    <string name="license_title">فعّل ترخيصك</string>
+    <string name="license_subtitle">أدخل مفتاح الترخيص الذي حصلت عليه لفتح MI Trade Master.</string>
+    <string name="license_key_hint">MITV-XXXX-XXXX-XXXX</string>
+    <string name="license_activate_btn">تفعيل</string>
+    <string name="license_invalid">مفتاح الترخيص غير صالح أو منتهي الصلاحية</string>
+    <string name="license_no_key_help">ليس لديك مفتاح؟ تواصل مع فريق MI Trade Master للحصول على واحد.</string>
+
+    <string name="nav_home">الرئيسية</string>
+    <string name="nav_analyzer">المحلل</string>
+    <string name="nav_learn">تعلّم</string>
+    <string name="nav_account">الحساب</string>
+    <string name="nav_settings">الإعدادات</string>
+
+    <string name="home_welcome">مرحبًا بعودتك</string>
+    <string name="home_start_overlay">تشغيل المحلل العائم</string>
+    <string name="home_stop_overlay">إيقاف المحلل العائم</string>
+    <string name="home_disclaimer_short">تحليل تعليمي للرسوم البيانية — ليس استشارة مالية</string>
+
+    <string name="analyzer_title">محلل الرسم البياني</string>
+    <string name="analyzer_capture_btn">التقاط وتحليل</string>
+    <string name="analyzer_mode_offline">دون اتصال (على الجهاز)</string>
+    <string name="analyzer_mode_online">متصل (متقدم)</string>
+    <string name="analyzer_direction_up">ميل صعودي</string>
+    <string name="analyzer_direction_down">ميل هبوطي</string>
+    <string name="analyzer_direction_neutral">غير واضح</string>
+    <string name="analyzer_confidence">مستوى الثقة</string>
+    <string name="analyzer_disclaimer">هذه ملاحظة تعليمية للنمط، وليست نتيجة مضمونة. قم دائمًا بإدارة المخاطر الخاصة بك.</string>
+
+    <string name="overlay_toggle_active">النقر التلقائي</string>
+    <string name="overlay_toggle_hint">عند التفعيل، سيتم النقر في الموقع المحفوظ عند ظهور إشارة. عند الإيقاف، ستظهر الإشارة فقط.</string>
+
+    <string name="account_title">الحساب</string>
+    <string name="account_license_key">مفتاح الترخيص</string>
+    <string name="account_expires">تاريخ الانتهاء</string>
+    <string name="account_status_active">نشط</string>
+    <string name="account_status_expired">منتهي</string>
+
+    <string name="settings_title">الإعدادات</string>
+    <string name="settings_language">اللغة</string>
+    <string name="settings_dot_size">حجم الفقاعة</string>
+    <string name="settings_dot_position">إعادة تعيين موقع الفقاعة</string>
+    <string name="settings_logout">إلغاء تفعيل الترخيص على هذا الجهاز</string>
+
+    <string name="learn_title">تعلّم التداول</string>
+    <string name="learn_subtitle">دورات في قراءة الرسوم البيانية وإدارة المخاطر والاستراتيجية، بالسرعة التي تناسبك.</string>
+</resources>
