@@ -7,27 +7,33 @@
 <style>
   :root{
     --bg: #05080a; --panel: #0b1114; --panel-2: #0f171b; --line: #1c2a2f;
-    --green: #34e39a; --green-dim: #1a7a56; --red: #ff5c6a;
+    --green: #34e39a; --green-dim: #1a7a56; --red: #ff5c6a; --amber:#ffc107;
     --silver: #cdd6d8; --silver-dim: #7c8b8f;
     --mono: 'JetBrains Mono', 'Courier New', monospace;
   }
   * { box-sizing: border-box; }
   body{
-    margin:0; background: radial-gradient(ellipse at top, #0d1518 0%, #05080a 60%);
+    margin:0; background:
+      radial-gradient(ellipse 900px 500px at 15% -10%, rgba(52,227,154,0.08), transparent 60%),
+      radial-gradient(ellipse at top, #0d1518 0%, #05080a 60%);
     color: var(--silver); font-family: var(--mono); min-height:100vh;
   }
   a { color: inherit; }
   ::-webkit-scrollbar{ width:8px; height:8px; }
   ::-webkit-scrollbar-thumb{ background: var(--line); border-radius:4px; }
+  @keyframes fadeUp{ from{ opacity:0; transform: translateY(6px); } to{ opacity:1; transform:none; } }
+  @keyframes pop{ from{ opacity:0; transform: scale(.96); } to{ opacity:1; transform:none; } }
 
   /* ---------- Login gate ---------- */
-  .login-gate{ max-width: 360px; margin: 12vh auto; text-align:center; padding: 20px; }
+  .login-gate{ max-width: 360px; margin: 12vh auto; text-align:center; padding: 28px 24px;
+    background: linear-gradient(180deg, var(--panel), var(--panel-2));
+    border: 1px solid var(--line); border-radius: 18px; animation: fadeUp .4s ease; }
   .logo-m{
     width:56px; height:56px; border-radius:16px; margin: 0 auto 16px;
     background: linear-gradient(145deg, #1a2226, #0a0f11);
     border: 1px solid var(--line); display:flex; align-items:center; justify-content:center;
     font-weight:900; font-size:22px; color: var(--green);
-    box-shadow: 0 0 18px rgba(52,227,154,0.25) inset;
+    box-shadow: 0 0 24px rgba(52,227,154,0.3) inset, 0 0 30px rgba(52,227,154,0.08);
   }
   .login-gate h1{ color:#fff; font-size:20px; margin: 0 0 4px; }
   .login-gate p{ color:var(--silver-dim); font-size:12px; margin: 0 0 20px; }
@@ -45,42 +51,51 @@
     background: linear-gradient(135deg, var(--green), #1fae7a);
     color:#04120b; border:none; padding:11px 16px; border-radius:9px;
     font-family: var(--mono); font-weight:700; font-size:12px; letter-spacing:0.3px;
-    cursor:pointer; transition: transform .1s, box-shadow .15s;
+    cursor:pointer; transition: transform .12s ease, box-shadow .15s ease, filter .15s ease;
+    box-shadow: 0 2px 10px rgba(52,227,154,0.18);
   }
-  button:hover{ transform: translateY(-1px); }
-  button.secondary{ background: transparent; color: var(--silver); border: 1px solid var(--line); }
+  button:hover{ transform: translateY(-1px); filter: brightness(1.08); box-shadow: 0 4px 16px rgba(52,227,154,0.28); }
+  button:active{ transform: translateY(0); }
+  button.secondary{ background: transparent; color: var(--silver); border: 1px solid var(--line); box-shadow:none; }
+  button.secondary:hover{ border-color:#334147; box-shadow:none; }
   button.danger{ background: rgba(255,92,106,0.12); color: var(--red); box-shadow:none; }
+  button.danger:hover{ background: rgba(255,92,106,0.2); box-shadow:none; }
   button.small{ padding: 6px 10px; font-size: 10px; }
-  button:disabled{ opacity: 0.5; cursor: not-allowed; }
+  button:disabled{ opacity: 0.5; cursor: not-allowed; transform:none; }
 
   /* ---------- App shell ---------- */
-  .app-shell{ display: none; }
+  .app-shell{ display: none; animation: fadeUp .35s ease; }
   header{
-    display:flex; align-items:center; gap:14px; padding: 16px 24px;
+    display:flex; align-items:center; gap:14px; padding: 14px 24px;
     border-bottom: 1px solid var(--line); position: sticky; top:0;
-    background: rgba(5,8,10,0.9); backdrop-filter: blur(6px); z-index: 10;
+    background: rgba(5,8,10,0.85); backdrop-filter: blur(10px); z-index: 10;
   }
   header .logo-m{ width:38px; height:38px; font-size:16px; margin:0; }
   header h1{ font-size:15px; margin:0; color:#fff; font-weight:600; }
+  header h1 span{ color: var(--green); }
   header .spacer{ flex:1; }
-  header .adminEmail{ font-size:11px; color: var(--silver-dim); }
+  header .adminEmail{ font-size:11px; color: var(--silver-dim); background:#0a1114; border:1px solid var(--line); padding:5px 10px; border-radius:20px; }
 
   nav.tabs{
     display:flex; gap:4px; padding: 0 24px; border-bottom: 1px solid var(--line);
-    overflow-x:auto;
+    overflow-x:auto; position: sticky; top:65px; background: rgba(5,8,10,0.85); backdrop-filter: blur(10px); z-index:9;
   }
   nav.tabs button{
     background:none; color: var(--silver-dim); border:none; box-shadow:none;
     padding: 12px 14px; font-size: 11px; border-bottom: 2px solid transparent;
-    border-radius: 0; white-space:nowrap;
+    border-radius: 0; white-space:nowrap; transition: color .15s ease, border-color .15s ease;
   }
-  nav.tabs button.active{ color: var(--green); border-bottom-color: var(--green); }
+  nav.tabs button:hover{ color: var(--silver); transform:none; box-shadow:none; }
+  nav.tabs button.active{ color: var(--green); border-bottom-color: var(--green); text-shadow: 0 0 12px rgba(52,227,154,0.4); }
 
   main{ padding: 24px; max-width: 1100px; margin: 0 auto; }
+  main > section{ animation: fadeUp .3s ease; }
   .panel{
     background: linear-gradient(180deg, var(--panel), var(--panel-2));
     border: 1px solid var(--line); border-radius: 14px; padding: 20px; margin-bottom: 18px;
+    transition: border-color .2s ease;
   }
+  .panel:hover{ border-color: #24343a; }
   .panel h2{ font-size:12px; text-transform: uppercase; letter-spacing: 1.5px; color: var(--silver-dim); margin: 0 0 16px; }
   .panel h2::before{ content:"// "; color: var(--green-dim); }
 
@@ -88,35 +103,54 @@
   @media (max-width: 700px){ .grid-2{ grid-template-columns: 1fr; } }
 
   table{ width:100%; border-collapse: collapse; font-size:12px; }
-  th{ text-align:left; color:var(--silver-dim); font-weight:500; padding: 8px 10px; border-bottom:1px solid var(--line); text-transform:uppercase; font-size:10px; }
+  th{ text-align:left; color:var(--silver-dim); font-weight:500; padding: 8px 10px; border-bottom:1px solid var(--line); text-transform:uppercase; font-size:10px; letter-spacing:0.5px; }
   td{ padding:10px; border-bottom:1px solid #101a1d; vertical-align: top; }
-  .badge{ padding:3px 8px; border-radius:20px; font-size:10px; font-weight:700; display:inline-block; }
-  .badge.active{ background: rgba(52,227,154,0.12); color: var(--green); }
-  .badge.pending{ background: rgba(255,193,7,0.12); color: #ffc107; }
-  .badge.expired, .badge.rejected{ background: rgba(255,92,106,0.12); color: var(--red); }
-  .thumb{ width: 44px; height: 44px; border-radius: 8px; object-fit: cover; background: #070b0d; }
+  tbody tr{ transition: background .15s ease; }
+  tbody tr:hover{ background: rgba(255,255,255,0.015); }
+  .badge{ padding:3px 10px; border-radius:20px; font-size:10px; font-weight:700; display:inline-block; letter-spacing:0.4px; }
+  .badge.active{ background: rgba(52,227,154,0.12); color: var(--green); box-shadow: 0 0 0 1px rgba(52,227,154,0.2) inset; }
+  .badge.pending{ background: rgba(255,193,7,0.12); color: var(--amber); box-shadow: 0 0 0 1px rgba(255,193,7,0.2) inset; }
+  .badge.expired, .badge.rejected{ background: rgba(255,92,106,0.12); color: var(--red); box-shadow: 0 0 0 1px rgba(255,92,106,0.2) inset; }
+  .thumb{ width: 44px; height: 44px; border-radius: 8px; object-fit: cover; background: #070b0d; border:1px solid var(--line); cursor:pointer; transition: transform .15s ease; }
+  .thumb:hover{ transform: scale(1.08); }
+  .thumb-fallback{
+    width:44px; height:44px; border-radius:8px; background:#0a1114; border:1px solid var(--line);
+    display:flex; align-items:center; justify-content:center; color: var(--silver-dim); font-size:16px;
+  }
   .row-actions{ display:flex; gap:6px; flex-wrap: wrap; }
-  .empty{ color: var(--silver-dim); font-size:12px; padding: 20px 0; text-align:center; }
+  .empty{ color: var(--silver-dim); font-size:12px; padding: 30px 0; text-align:center; }
   .stat-row{ display:flex; gap: 14px; flex-wrap: wrap; margin-bottom: 18px; }
-  .stat-card{ flex:1; min-width: 140px; background: var(--panel); border:1px solid var(--line); border-radius:12px; padding:16px; }
-  .stat-card .value{ font-size: 24px; font-weight: 800; color: var(--green); }
+  .stat-card{
+    flex:1; min-width: 140px; background: linear-gradient(180deg, var(--panel), var(--panel-2));
+    border:1px solid var(--line); border-radius:12px; padding:16px; animation: pop .3s ease;
+    transition: border-color .2s ease, transform .15s ease;
+  }
+  .stat-card:hover{ border-color: var(--green-dim); transform: translateY(-2px); }
+  .stat-card .value{ font-size: 26px; font-weight: 800; color: var(--green); text-shadow: 0 0 20px rgba(52,227,154,0.25); }
   .stat-card .label{ font-size: 11px; color: var(--silver-dim); margin-top:4px; }
 
   .modal-backdrop{
-    display:none; position: fixed; inset:0; background: rgba(0,0,0,0.6); z-index: 50;
-    align-items:center; justify-content:center; padding: 20px;
+    display:none; position: fixed; inset:0; background: rgba(0,0,0,0.65); z-index: 50;
+    align-items:center; justify-content:center; padding: 20px; backdrop-filter: blur(3px);
   }
   .modal{
     background: var(--panel-2); border: 1px solid var(--line); border-radius: 14px;
     padding: 22px; max-width: 480px; width:100%; max-height: 85vh; overflow-y:auto;
+    animation: pop .2s ease;
   }
   .modal h3{ margin:0 0 14px; color:#fff; font-size: 14px; }
   .toast{
     position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
     background: var(--panel-2); border:1px solid var(--green-dim); color: var(--green);
     padding: 12px 20px; border-radius: 10px; font-size:12px; z-index: 100; display:none;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.4), 0 0 0 1px rgba(52,227,154,0.1);
   }
-  .qr-preview{ width: 140px; height:140px; object-fit:contain; background:#070b0d; border-radius:10px; border:1px solid var(--line); margin-top:10px; }
+  .qr-preview{ width: 160px; height:160px; object-fit:contain; background:#070b0d; border-radius:10px; border:1px solid var(--line); margin-top:10px; cursor:pointer; }
+  .img-zoom-backdrop{
+    display:none; position: fixed; inset:0; background: rgba(0,0,0,0.85); z-index: 60;
+    align-items:center; justify-content:center; padding: 30px; cursor: zoom-out;
+  }
+  .img-zoom-backdrop img{ max-width:90vw; max-height:90vh; border-radius:12px; border:1px solid var(--line); }
 </style>
 </head>
 <body>
@@ -142,7 +176,7 @@
 <div class="app-shell" id="appShell">
   <header>
     <div class="logo-m">M</div>
-    <h1>MI Trade Master — Admin</h1>
+    <h1>MI Trade <span>Master</span> — Admin</h1>
     <div class="spacer"></div>
     <span class="adminEmail" id="adminEmailLabel"></span>
     <button class="secondary small" onclick="adminSignOut()" style="margin-left:12px;">Sign Out</button>
@@ -250,7 +284,7 @@
           <p style="font-size:11px; color:var(--silver-dim);">Upload your payment QR code image (via ImgBB) — students will see this on the payment screen.</p>
           <label>QR Code Image</label>
           <input type="file" id="qrFileInput" accept="image/*" />
-          <img id="qrPreview" class="qr-preview" style="display:none;" />
+          <img id="qrPreview" class="qr-preview" style="display:none;" onclick="openImgZoom(this.src)" />
           <div style="margin-top:12px;"><button onclick="uploadQrCode()">Upload & Save QR</button></div>
         </div>
         <div class="panel">
@@ -284,6 +318,11 @@
   </div>
 </div>
 
+<!-- Image zoom viewer -->
+<div class="img-zoom-backdrop" id="imgZoomBackdrop" onclick="closeImgZoom()">
+  <img id="imgZoomTarget" src="" />
+</div>
+
 <!-- ============ FIREBASE ============ -->
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
@@ -295,7 +334,6 @@
 // expose client-side; it's not a secret, access is controlled by
 // Firestore/Auth security rules.
 // ======================================================================
-// For Firebase JS SDK v7.20.0 and later, measurementId is optional
 const firebaseConfig = {
   apiKey: "AIzaSyCldWSASWc8cYKugKsbUR6AyEeUcpopeRE",
   authDomain: "mitrademaster.firebaseapp.com",
@@ -305,6 +343,7 @@ const firebaseConfig = {
   appId: "1:206224301348:web:305c5c73e0cb5fa117e7b1",
   measurementId: "G-LHSQXCH6BK"
 };
+
 firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
 const db = firebase.firestore();
@@ -361,6 +400,20 @@ function showToast(msg) {
   setTimeout(() => t.style.display = 'none', 3000);
 }
 
+function openImgZoom(url) {
+  if (!url) return;
+  document.getElementById('imgZoomTarget').src = url;
+  document.getElementById('imgZoomBackdrop').style.display = 'flex';
+}
+function closeImgZoom() {
+  document.getElementById('imgZoomBackdrop').style.display = 'none';
+}
+function thumbOrFallback(url, icon) {
+  return url
+    ? `<img class="thumb" src="${url}" onclick="openImgZoom('${url}')" />`
+    : `<div class="thumb-fallback">${icon || '—'}</div>`;
+}
+
 // ---------------------------------------------------------------------
 // Dashboard
 // ---------------------------------------------------------------------
@@ -411,7 +464,7 @@ function renderStudents() {
   if (studentsCache.length === 0) { body.innerHTML = '<tr><td colspan="6" class="empty">No students yet</td></tr>'; return; }
   body.innerHTML = studentsCache.map(s => `
     <tr>
-      <td>${s.photoUrl ? `<img class="thumb" src="${s.photoUrl}" />` : '—'}</td>
+      <td>${thumbOrFallback(s.photoUrl, '👤')}</td>
       <td>${s.studentName || '—'}</td>
       <td>${s.fatherName || '—'}</td>
       <td>${s.studentIdCardNumber || '—'}</td>
@@ -438,7 +491,7 @@ function viewStudent(uid) {
   const s = studentsCache.find(x => x.id === uid);
   if (!s) return;
   document.getElementById('studentModalBody').innerHTML = `
-    ${s.photoUrl ? `<img class="thumb" style="width:80px;height:80px;" src="${s.photoUrl}" />` : ''}
+    ${s.photoUrl ? `<img class="thumb" style="width:80px;height:80px;" src="${s.photoUrl}" onclick="openImgZoom('${s.photoUrl}')" />` : ''}
     <p><b>Name:</b> ${s.studentName || '—'}</p>
     <p><b>Father's Name:</b> ${s.fatherName || '—'}</p>
     <p><b>ID Card Number:</b> ${s.studentIdCardNumber || '—'}</p>
@@ -449,7 +502,7 @@ function viewStudent(uid) {
     <p><b>Subscription:</b> ${s.subscriptionStatus || 'pending'}</p>
     <p><b>Lessons Completed:</b> ${s.lessonsCompleted || 0}</p>
     <p><b>Analyses Run:</b> ${s.analysesRun || 0}</p>
-    ${s.idCardPhotoUrl ? `<p><b>ID Card Photo:</b><br/><img class="thumb" style="width:160px;height:100px;" src="${s.idCardPhotoUrl}" /></p>` : ''}
+    ${s.idCardPhotoUrl ? `<p><b>ID Card Photo:</b><br/><img class="thumb" style="width:160px;height:100px;" src="${s.idCardPhotoUrl}" onclick="openImgZoom('${s.idCardPhotoUrl}')" /></p>` : ''}
   `;
   document.getElementById('studentModalBackdrop').style.display = 'flex';
 }
@@ -466,7 +519,7 @@ async function loadPayments() {
   if (payments.length === 0) { body.innerHTML = '<tr><td colspan="5" class="empty">No payment submissions yet</td></tr>'; return; }
   body.innerHTML = payments.map(p => `
     <tr>
-      <td>${p.screenshotUrl ? `<img class="thumb" src="${p.screenshotUrl}" />` : '—'}</td>
+      <td>${thumbOrFallback(p.screenshotUrl, '🧾')}</td>
       <td>${p.studentName || '—'}</td>
       <td>${p.submittedAt ? new Date(p.submittedAt).toLocaleString() : '—'}</td>
       <td><span class="badge ${p.status}">${p.status.toUpperCase()}</span></td>
