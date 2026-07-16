@@ -16,7 +16,7 @@ android {
         versionName = "1.0.0"
 
         // Default backend URL — override in local.properties or CI secrets if needed
-        buildConfigField("String", "API_BASE_URL", "\"https://YOUR-HF-USERNAME-mi-trade-master.hf.space/\"")
+        buildConfigField("String", "API_BASE_URL", "\"https://muaaznamtosonahoga1-d385064.hf.space\"")
     }
 
     buildTypes {
