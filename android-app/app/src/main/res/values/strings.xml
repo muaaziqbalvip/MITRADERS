@@ -1,61 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">MI Trade Master</string>
+    <string name="splash_tagline">Beginner to Pro Trader</string>
 
-    <!-- Splash -->
-    <string name="splash_tagline">Chart Analysis. Simplified.</string>
-
-    <!-- License activation -->
-    <string name="license_title">Activate Your License</string>
-    <string name="license_subtitle">Enter the license key you received to unlock MI Trade Master.</string>
-    <string name="license_key_hint">MITV-XXXX-XXXX-XXXX</string>
-    <string name="license_activate_btn">Activate</string>
-    <string name="license_invalid">Invalid or expired license key</string>
-    <string name="license_no_key_help">Don\'t have a key? Contact the MI Trade Master team to get one.</string>
-
-    <!-- Bottom nav -->
-    <string name="nav_home">Home</string>
-    <string name="nav_analyzer">Analyzer</string>
-    <string name="nav_learn">Learn</string>
-    <string name="nav_account">Account</string>
-    <string name="nav_settings">Settings</string>
-
-    <!-- Home -->
-    <string name="home_welcome">Welcome back</string>
-    <string name="home_start_overlay">Start Floating Analyzer</string>
-    <string name="home_stop_overlay">Stop Floating Analyzer</string>
-    <string name="home_disclaimer_short">Educational chart analysis — not financial advice</string>
-
-    <!-- Analyzer -->
-    <string name="analyzer_title">Chart Analyzer</string>
-    <string name="analyzer_capture_btn">Capture &amp; Analyze</string>
-    <string name="analyzer_mode_offline">Offline (on-device)</string>
-    <string name="analyzer_mode_online">Online (advanced)</string>
-    <string name="analyzer_direction_up">Bullish Lean</string>
-    <string name="analyzer_direction_down">Bearish Lean</string>
-    <string name="analyzer_direction_neutral">Neutral / No Clear Lean</string>
-    <string name="analyzer_confidence">Confidence</string>
-    <string name="analyzer_disclaimer">This is an educational pattern observation, not a guaranteed outcome. Always manage your own risk.</string>
-
-    <!-- Overlay panel -->
-    <string name="overlay_toggle_active">Auto-tap</string>
-    <string name="overlay_toggle_hint">When on, taps at your saved spot on signal. When off, only shows the signal.</string>
-
-    <!-- Account -->
-    <string name="account_title">Account</string>
-    <string name="account_license_key">License Key</string>
-    <string name="account_expires">Expires</string>
-    <string name="account_status_active">Active</string>
-    <string name="account_status_expired">Expired</string>
-
-    <!-- Settings -->
-    <string name="settings_title">Settings</string>
-    <string name="settings_language">Language</string>
-    <string name="settings_dot_size">Bubble Size</string>
-    <string name="settings_dot_position">Reset Bubble Position</string>
-    <string name="settings_logout">Deactivate License on This Device</string>
-
-    <!-- Learn -->
-    <string name="learn_title">Learn Trading</string>
-    <string name="learn_subtitle">Courses on chart reading, risk management, and strategy — at your pace.</string>
+    <!-- Google Sign-In Web Client ID — get this from Firebase Console →
+         Authentication → Sign-in method → Google → Web SDK configuration.
+         This is ALSO set via resValue in build.gradle.kts; the build.gradle
+         value takes precedence, but keep both in sync for clarity. -->
+    <string name="default_web_client_id" translatable="false">REPLACE_WITH_YOUR_WEB_CLIENT_ID</string>
 </resources>

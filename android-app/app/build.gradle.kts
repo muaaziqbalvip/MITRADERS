@@ -12,11 +12,16 @@ android {
         applicationId = "com.mitv.trademaster"
         minSdk = 26
         targetSdk = 34
-        versionCode = 1
-        versionName = "1.0.0"
+        versionCode = 2
+        versionName = "2.0.0"
 
-        // Default backend URL — override in local.properties or CI secrets if needed
-        buildConfigField("String", "API_BASE_URL", "\"https://muaaznamtosonahoga1-d385064.hf.space\"")
+        // Groq API key is NOT stored in the app — it's fetched at runtime from
+        // Firestore (config/groq document), settable/rotatable from the admin
+        // panel. This avoids shipping a secret inside the APK.
+        buildConfigField("String", "IMGBB_API_KEY", "\"6bdb23b28e7581721b28e46ce313308b\"")
+
+        // GitHub OAuth Web Client ID — required by Firebase Auth GitHub provider flow
+        resValue("string", "default_web_client_id", "\"REPLACE_WITH_YOUR_WEB_CLIENT_ID\"")
     }
 
     buildTypes {
@@ -64,30 +69,36 @@ dependencies {
     implementation("androidx.navigation:navigation-compose:2.7.7")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.2")
 
-    // DataStore for local prefs (license cache, settings)
+    // DataStore for local prefs (session cache, settings)
     implementation("androidx.datastore:datastore-preferences:1.1.1")
 
-    // Networking
+    // Networking (ImgBB upload, Groq chat)
     implementation("com.squareup.retrofit2:retrofit:2.11.0")
     implementation("com.squareup.retrofit2:converter-gson:2.11.0")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("com.squareup.okhttp3:logging-interceptor:4.12.0")
 
-    // Firebase (per existing stack — auth + firestore for account/sync)
+    // Firebase — Auth (Email/Google/GitHub/Phone), Firestore (no Storage — free plan), Messaging
     implementation(platform("com.google.firebase:firebase-bom:33.1.2"))
     implementation("com.google.firebase:firebase-auth-ktx")
     implementation("com.google.firebase:firebase-firestore-ktx")
     implementation("com.google.firebase:firebase-messaging-ktx")
 
-    // Image loading (SVG/PNG posters, icons)
+    // Google Sign-In via Credential Manager (modern replacement for old GoogleSignIn API)
+    implementation("androidx.credentials:credentials:1.3.0")
+    implementation("androidx.credentials:credentials-play-services-auth:1.3.0")
+    implementation("com.google.android.libraries.identity.googleid:googleid:1.1.1")
+
+    // Coroutines + Play Services interop (Firebase Tasks -> suspend)
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.8.1")
+
+    // Image loading (ImgBB-hosted photos, posters, icons)
     implementation("io.coil-kt:coil-compose:2.6.0")
     implementation("io.coil-kt:coil-svg:2.6.0")
 
-    // Coroutines
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
-
-    // On-device image analysis (bitmap pixel processing — no heavy CV lib needed)
-    // (kept dependency-light intentionally; analysis logic is hand-rolled in /analysis)
+    // YouTube lecture embedding
+    implementation("com.pierfrancescosoffritti.androidyoutubeplayer:core:12.1.2")
 
     testImplementation("junit:junit:4.13.2")
     androidTestImplementation("androidx.test.ext:junit:1.2.1")
