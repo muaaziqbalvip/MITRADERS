@@ -29,7 +29,6 @@ import com.mitv.trademaster.data.FirestoreRepository
 import com.mitv.trademaster.data.model.Course
 import com.mitv.trademaster.data.model.Lesson
 import com.mitv.trademaster.ui.theme.*
-import com.pierfrancescosoffritti.androidyoutubeplayer.core.player.YouTubePlayerView
 import com.pierfrancescosoffritti.androidyoutubeplayer.core.player.listeners.AbstractYouTubePlayerListener
 import com.pierfrancescosoffritti.androidyoutubeplayer.core.player.views.YouTubePlayerView as YTPlayerView
 import kotlinx.coroutines.launch
