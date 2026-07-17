@@ -46,8 +46,7 @@ fun MainShellScreen(language: String, onLanguageChanged: (String) -> Unit, onSig
             NavigationBar(
                 containerColor = PanelDark,
                 contentColor = BrandSilver,
-                tonalElevation = 0.dp,
-                modifier = Modifier.height(72.dp)
+                tonalElevation = 0.dp
             ) {
                 tabs.forEach { tab ->
                     val isMore = tab == Tab.More
