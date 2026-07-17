@@ -1,4 +1,4 @@
-fname: Build MI Trade Master APK
+name: Build MI Trade Master APK
 
 on:
   push:
@@ -42,38 +42,30 @@ jobs:
         run: |
           if [ -n "$GOOGLE_SERVICES_JSON" ]; then
             echo "$GOOGLE_SERVICES_JSON" > app/google-services.json
-          else
+          elif [ -f app/google-services.sample.json ]; then
             echo "WARNING: GOOGLE_SERVICES_JSON secret not set, using placeholder."
             cp app/google-services.sample.json app/google-services.json
+          else
+            echo "ERROR: No google-services.json and no sample file found."
+            exit 1
           fi
 
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
-      - name: Ensure debug keystore exists
+      - name: Restore FIXED debug keystore (same SHA-1 always)
+        env:
+          DEBUG_KEYSTORE_BASE64: ${{ secrets.DEBUG_KEYSTORE_BASE64 }}
         run: |
-          create_keystore() {
-            local KEYSTORE_PATH="$1"
-            mkdir -p "$(dirname "$KEYSTORE_PATH")"
-            if [ ! -f "$KEYSTORE_PATH" ]; then
-              keytool -genkeypair -v \
-                -keystore "$KEYSTORE_PATH" \
-                -storepass android -keypass android \
-                -alias AndroidDebugKey \
-                -keyalg RSA -keysize 2048 -validity 10000 \
-                -dname "CN=Android Debug,O=Android,C=US"
-              echo "Generated new debug keystore at $KEYSTORE_PATH"
-            else
-              echo "Debug keystore already exists at $KEYSTORE_PATH"
-            fi
-          }
-          # Legacy location (older AGP / Android tooling)
-          create_keystore "$HOME/.android/debug.keystore"
-          # New XDG-style location used by recent Android command-line tools
-          create_keystore "$HOME/.config/.android/debug.keystore"
+          mkdir -p "$HOME/.android"
+          mkdir -p "$HOME/.config/.android"
+          echo "$DEBUG_KEYSTORE_BASE64" | base64 -d > "$HOME/.android/debug.keystore"
+          cp "$HOME/.android/debug.keystore" "$HOME/.config/.android/debug.keystore"
+          echo "Fixed keystore restored from secret - SHA-1 always same"
 
-      - name: Print debug SHA-1 fingerprint
-        run: ./gradlew signingReport --stacktrace
+      - name: Print SHA-1 fingerprint
+        run: |
+          ./gradlew signingReport --stacktrace 2>&1 | grep -A 5 "Variant: debug"
 
       - name: Build debug APK
         env:
@@ -103,5 +95,6 @@ jobs:
 
             Install: download the APK below, allow install from unknown sources on your device, and open it.
 
-            If Google or GitHub Sign-In fails, check this run's log for the "Print debug SHA-1 fingerprint" step and make sure that fingerprint is added in Firebase Console under Project Settings, Your apps.
+            SHA-1 Fingerprint (fixed, same every build):
+            E3:B0:75:C4:B6:E6:0A:CB:82:1E:15:CE:0B:9E:74:28:FD:65:61:65
           files: android-app/app/build/outputs/apk/debug/release/MI-Trade-Master-v3.0.${{ github.run_number }}.apk
