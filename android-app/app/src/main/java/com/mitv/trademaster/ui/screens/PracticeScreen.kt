@@ -77,7 +77,7 @@ fun PracticeScreen(language: String) {
     }
 
     Column(modifier = Modifier.fillMaxSize().background(BgBlack).padding(20.dp)) {
-        Row(horizontalAlignment = Alignment.CenterHorizontally, verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
             Column(Modifier.weight(1f)) {
                 Text(if (language == "ur") "پریکٹس موڈ" else "Practice Mode", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
                 Text(if (language == "ur") "ڈیمو بیلنس — کوئی اصل رقم نہیں" else "DEMO balance — no real money", color = BrandSilverDim, fontSize = 11.sp)

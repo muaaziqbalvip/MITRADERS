@@ -10,9 +10,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Chat
 import androidx.compose.material.icons.filled.QrCode2
 import androidx.compose.material.icons.filled.Upload
-import androidx.compose.material.icons.filled.WhatsApp
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -181,7 +181,7 @@ fun PaymentScreen(studentName: String, onSubmitted: () -> Unit) {
             shape = RoundedCornerShape(12.dp),
             modifier = Modifier.fillMaxWidth()
         ) {
-            Icon(Icons.Filled.WhatsApp, contentDescription = null, modifier = Modifier.size(18.dp))
+            Icon(Icons.Filled.Chat, contentDescription = null, modifier = Modifier.size(18.dp))
             Spacer(Modifier.width(8.dp))
             Text("Contact Support on WhatsApp", fontSize = 13.sp)
         }
