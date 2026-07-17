@@ -52,20 +52,25 @@ jobs:
 
       - name: Ensure debug keystore exists
         run: |
-          KEYSTORE_DIR="$HOME/.android"
-          KEYSTORE_PATH="$KEYSTORE_DIR/debug.keystore"
-          mkdir -p "$KEYSTORE_DIR"
-          if [ ! -f "$KEYSTORE_PATH" ]; then
-            keytool -genkeypair -v \
-              -keystore "$KEYSTORE_PATH" \
-              -storepass android -keypass android \
-              -alias AndroidDebugKey \
-              -keyalg RSA -keysize 2048 -validity 10000 \
-              -dname "CN=Android Debug,O=Android,C=US"
-            echo "Generated new debug keystore at $KEYSTORE_PATH"
-          else
-            echo "Debug keystore already exists at $KEYSTORE_PATH"
-          fi
+          create_keystore() {
+            local KEYSTORE_PATH="$1"
+            mkdir -p "$(dirname "$KEYSTORE_PATH")"
+            if [ ! -f "$KEYSTORE_PATH" ]; then
+              keytool -genkeypair -v \
+                -keystore "$KEYSTORE_PATH" \
+                -storepass android -keypass android \
+                -alias AndroidDebugKey \
+                -keyalg RSA -keysize 2048 -validity 10000 \
+                -dname "CN=Android Debug,O=Android,C=US"
+              echo "Generated new debug keystore at $KEYSTORE_PATH"
+            else
+              echo "Debug keystore already exists at $KEYSTORE_PATH"
+            fi
+          }
+          # Legacy location (older AGP / Android tooling)
+          create_keystore "$HOME/.android/debug.keystore"
+          # New XDG-style location used by recent Android command-line tools
+          create_keystore "$HOME/.config/.android/debug.keystore"
 
       - name: Print debug SHA-1 fingerprint
         run: ./gradlew signingReport --stacktrace
