@@ -1,4 +1,4 @@
-name: Build MI Trade Master APK
+fname: Build MI Trade Master APK
 
 on:
   push:
