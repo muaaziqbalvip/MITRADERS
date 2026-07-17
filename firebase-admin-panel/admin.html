@@ -29,6 +29,41 @@
   @keyframes pop{ from{ opacity:0; transform: scale(.95); } to{ opacity:1; transform:none; } }
   @keyframes tap{ 0%{ transform:scale(1); } 50%{ transform:scale(.94); } 100%{ transform:scale(1); } }
 
+  /* ================= SPLASH SCREEN ================= */
+  .splash-screen{
+    position: fixed; inset:0; z-index: 200;
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    background: radial-gradient(ellipse 900px 500px at 50% 20%, rgba(52,227,154,0.1), transparent 60%),
+      radial-gradient(ellipse at top, #0d1518 0%, #05080a 60%);
+    animation: splashOut .5s ease forwards; animation-delay: 1.9s;
+  }
+  @keyframes splashOut{ to{ opacity:0; visibility:hidden; pointer-events:none; } }
+  .splash-logo{
+    width:84px; height:84px; border-radius:24px; margin-bottom:18px;
+    background: linear-gradient(145deg, #1a2226, #0a0f11);
+    border: 1px solid var(--line); display:flex; align-items:center; justify-content:center;
+    font-weight:900; font-size:34px; color: var(--green);
+    box-shadow: 0 0 40px rgba(52,227,154,0.35) inset, 0 0 50px rgba(52,227,154,0.15);
+    animation: pop .5s ease;
+  }
+  .splash-title{ color:#fff; font-size:22px; margin:0; font-family: var(--mono); animation: fadeUp .5s ease .1s both; }
+  .splash-title span{ color: var(--green); }
+  .splash-tag{ color: var(--silver-dim); font-size:11px; letter-spacing:2px; text-transform:uppercase; margin: 6px 0 30px; animation: fadeUp .5s ease .2s both; }
+  .splash-candles{ display:flex; align-items:flex-end; gap:6px; height:60px; margin-bottom: 34px; }
+  .splash-candles .c{ width:6px; border-radius:3px; background: var(--green); opacity:0.85; animation: candleGrow 1.1s ease-in-out infinite; box-shadow: 0 0 10px rgba(52,227,154,0.4); }
+  .splash-candles .c.red{ background: var(--red); box-shadow: 0 0 10px rgba(255,92,106,0.4); }
+  .splash-candles .c:nth-child(1){ animation-delay: 0s; }
+  .splash-candles .c:nth-child(2){ animation-delay: .1s; }
+  .splash-candles .c:nth-child(3){ animation-delay: .2s; }
+  .splash-candles .c:nth-child(4){ animation-delay: .3s; }
+  .splash-candles .c:nth-child(5){ animation-delay: .4s; }
+  .splash-candles .c:nth-child(6){ animation-delay: .5s; }
+  .splash-candles .c:nth-child(7){ animation-delay: .6s; }
+  @keyframes candleGrow{ 0%,100%{ height:14px; } 50%{ height:56px; } }
+  .splash-loader{ width:140px; height:3px; background:#101a1d; border-radius:3px; overflow:hidden; }
+  .splash-loader-bar{ width:40%; height:100%; background: linear-gradient(90deg, var(--green-dim), var(--green)); border-radius:3px; animation: loaderSlide 1s ease-in-out infinite; }
+  @keyframes loaderSlide{ 0%{ transform: translateX(-100%); } 100%{ transform: translateX(350%); } }
+
   /* ================= LOGIN SCREEN (full mobile screen) ================= */
   .login-screen{
     min-height:100vh; display:flex; flex-direction:column; align-items:center; justify-content:center;
@@ -63,7 +98,7 @@
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%237c8b8f' stroke-width='1.5' fill='none'/%3E%3C/svg%3E");
     background-repeat: no-repeat; background-position: right 14px center;
   }
-  input:focus, textarea:focus, select:focus{ border-color: var(--green-dim); }
+  input:focus, textarea:focus, select:focus{ border-color: var(--green-dim); box-shadow: 0 0 0 3px rgba(52,227,154,0.08); }
   input::placeholder, textarea::placeholder{ color:#3a4548; }
 
   button{
@@ -224,12 +259,40 @@
   .lesson-item, .course-item{
     display:flex; justify-content:space-between; align-items:center; padding:12px;
     background:#0a1114; border:1px solid var(--line); border-radius:14px; margin-bottom:8px;
+    transition: border-color .15s ease;
   }
+  .lesson-item:hover, .course-item:hover{ border-color: var(--green-dim); }
   .lesson-item .t{ color:#fff; font-size:12.5px; }
   .lesson-item .lvl{ color:var(--silver-dim); font-size:10px; margin-top:2px; }
+
+  #studentModalBody p{
+    display:flex; justify-content:space-between; gap:12px; margin: 0; padding: 10px 2px;
+    border-bottom: 1px solid #101a1d; font-size:12.5px;
+  }
+  #studentModalBody p:last-child{ border-bottom:none; }
+  #studentModalBody p b{ color: var(--silver-dim); font-weight:600; flex-shrink:0; }
+  #studentModalBody img.thumb{ display:block; margin: 4px auto 14px; }
+  #studentModalBody p:has(img){ display:block; text-align:center; border-bottom:none; }
+  .sheet-hidden{ display:none !important; }
+  .sheet-visible{ display:block !important; }
+
+  .card{ position: relative; overflow: hidden; }
+  .card::before{
+    content:""; position:absolute; top:0; left:0; right:0; height:1px;
+    background: linear-gradient(90deg, transparent, rgba(52,227,154,0.4), transparent);
+  }
 </style>
 </head>
 <body>
+
+<!-- ============ SPLASH SCREEN ============ -->
+<div class="splash-screen" id="splashScreen">
+  <div class="splash-logo">M</div>
+  <h1 class="splash-title">MI Trade <span>Master</span></h1>
+  <p class="splash-tag">Admin Console</p>
+  <div class="splash-candles" id="splashCandles"></div>
+  <div class="splash-loader"><div class="splash-loader-bar"></div></div>
+</div>
 
 <!-- ============ LOGIN SCREEN ============ -->
 <div class="login-screen" id="loginGate">
@@ -263,6 +326,7 @@
       <h1 id="pageTitle">Dashboard</h1>
       <small id="adminEmailLabel"></small>
     </div>
+    <button class="avatar-btn" onclick="goToPage('config')" style="margin-right:6px;">⚙️</button>
     <button class="avatar-btn" onclick="adminSignOut()">⎋</button>
   </div>
 
@@ -278,6 +342,35 @@
 
       <div class="section-title">Recently Active</div>
       <div id="recentActivityBody"><div class="empty"><div class="empty-icon">⏳</div>Loading…</div></div>
+    </section>
+
+    <!-- ============ CHART DEMO ============ -->
+    <section class="page" id="page-chart">
+      <div class="segmented" id="chartFilter">
+        <button data-tf="1m" class="active">1m</button>
+        <button data-tf="5m">5m</button>
+        <button data-tf="15m">15m</button>
+        <button data-tf="1h">1h</button>
+        <button data-tf="1d">1D</button>
+      </div>
+      <div class="card" style="padding:12px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; padding:0 4px;">
+          <div>
+            <div style="color:#fff; font-size:15px; font-weight:700;">XAU/USD <span id="chartPricePulse" style="color:var(--green); font-size:11px;">●</span></div>
+            <div id="chartPrice" style="font-size:20px; font-weight:800; color:var(--green);">—</div>
+          </div>
+          <div style="text-align:right;">
+            <div id="chartChange" style="font-size:12px; font-weight:700;">—</div>
+            <div style="font-size:10px; color:var(--silver-dim);">Demo Data</div>
+          </div>
+        </div>
+        <canvas id="candleCanvas" style="width:100%; height:280px; display:block; border-radius:12px; background:#070b0d;"></canvas>
+      </div>
+
+      <div class="section-title">Live Ticker (Demo)</div>
+      <div class="card">
+        <div id="tickerList"></div>
+      </div>
     </section>
 
     <!-- ============ STUDENTS ============ -->
@@ -350,9 +443,9 @@
   <nav class="bottom-nav" id="bottomNav">
     <button data-page="dashboard" class="active"><span class="ic">🏠</span>Home</button>
     <button data-page="students"><span class="ic">👥</span>Students</button>
+    <button data-page="chart"><span class="ic">📈</span>Chart</button>
     <button data-page="payments"><span class="ic">💳</span>Payments</button>
     <button data-page="courses"><span class="ic">📚</span>Courses</button>
-    <button data-page="config"><span class="ic">⚙️</span>Settings</button>
   </nav>
 </div>
 
@@ -362,9 +455,28 @@
 <div class="modal-backdrop" id="studentModalBackdrop">
   <div class="sheet">
     <div class="sheet-handle"></div>
-    <h3>Student Details</h3>
+    <h3 id="studentSheetTitle">Student Details</h3>
     <div id="studentModalBody"></div>
-    <button class="block secondary" style="margin-top:16px;" onclick="closeStudentModal()">Close</button>
+    <div id="studentEditFields" class="sheet-hidden">
+      <div class="field"><label>Name</label><input id="editStudentName" /></div>
+      <div class="field"><label>Father's Name</label><input id="editFatherName" /></div>
+      <div class="field"><label>ID Card Number</label><input id="editIdCardNumber" /></div>
+      <div class="field"><label>Father's Address</label><input id="editFatherAddress" /></div>
+      <div class="field"><label>Qualification</label><input id="editQualification" /></div>
+      <div class="field"><label>Phone</label><input id="editPhone" inputmode="tel" /></div>
+      <div class="field">
+        <label>Subscription Status</label>
+        <select id="editSubStatus">
+          <option value="pending">Pending</option>
+          <option value="active">Active</option>
+          <option value="expired">Expired</option>
+        </select>
+      </div>
+    </div>
+    <div style="display:flex; gap:8px; margin-top:16px;">
+      <button class="secondary" style="flex:1;" onclick="closeStudentModal()">Close</button>
+      <button style="flex:1;" id="studentEditToggleBtn" onclick="toggleStudentEdit()">Edit Profile</button>
+    </div>
   </div>
 </div>
 
@@ -401,7 +513,7 @@
 <div class="modal-backdrop" id="lessonModalBackdrop">
   <div class="sheet">
     <div class="sheet-handle"></div>
-    <h3>Add Lesson</h3>
+    <h3 id="lessonSheetTitle">Add Lesson</h3>
     <div class="field"><label>Title (English)</label><input id="lessonTitle" placeholder="What is a candlestick?" /></div>
     <div class="field"><label>Title (Urdu)</label><input id="lessonTitleUr" placeholder="کینڈل سٹک کیا ہے؟" /></div>
     <div class="field"><label>Content (English)</label><textarea id="lessonContent" rows="3" placeholder="Lesson text..."></textarea></div>
@@ -411,7 +523,7 @@
     <div class="field"><label>Order</label><input id="lessonOrder" type="number" inputmode="numeric" value="1" /></div>
     <div style="display:flex; gap:8px; margin-top:8px;">
       <button class="secondary" style="flex:1;" onclick="closeLessonSheet()">Cancel</button>
-      <button style="flex:1;" onclick="createLesson()">Add Lesson</button>
+      <button style="flex:1;" id="lessonSaveBtn" onclick="saveLesson()">Add Lesson</button>
     </div>
   </div>
 </div>
@@ -444,6 +556,19 @@ const auth = firebase.auth();
 const db = firebase.firestore();
 
 const IMGBB_API_KEY = "6bdb23b28e7581721b28e46ce313308b";
+
+// ---------------------------------------------------------------------
+// Splash screen
+// ---------------------------------------------------------------------
+(function initSplash() {
+  const container = document.getElementById('splashCandles');
+  const colors = ['', 'red', '', '', 'red', '', 'red'];
+  container.innerHTML = colors.map(c => `<div class="c ${c}"></div>`).join('');
+  setTimeout(() => {
+    const splash = document.getElementById('splashScreen');
+    if (splash) splash.remove();
+  }, 2600);
+})();
 
 // ---------------------------------------------------------------------
 // Auth
@@ -479,29 +604,29 @@ auth.onAuthStateChanged(user => {
 // Bottom nav / page switching
 // ---------------------------------------------------------------------
 
-const pageTitles = { dashboard: 'Dashboard', students: 'Students', payments: 'Payments', courses: 'Courses & Lessons', config: 'Settings' };
+const pageTitles = { dashboard: 'Dashboard', students: 'Students', chart: 'Chart Analysis', payments: 'Payments', courses: 'Courses & Lessons', config: 'Settings' };
 const fabActions = {
   courses: () => openCourseSheet(),
 };
 
-document.getElementById('bottomNav').addEventListener('click', (e) => {
-  const btn = e.target.closest('button[data-page]');
-  if (!btn) return;
-  const page = btn.dataset.page;
+function goToPage(page) {
   document.querySelectorAll('#bottomNav button').forEach(b => b.classList.remove('active'));
-  btn.classList.add('active');
+  const navBtn = document.querySelector(`#bottomNav button[data-page="${page}"]`);
+  if (navBtn) navBtn.classList.add('active');
   document.querySelectorAll('main > .page').forEach(s => s.classList.remove('active'));
   document.getElementById('page-' + page).classList.add('active');
   document.getElementById('pageTitle').textContent = pageTitles[page];
-
   const fab = document.getElementById('fabBtn');
-  if (fabActions[page]) {
-    fab.style.display = 'flex';
-    fab.onclick = fabActions[page];
-  } else {
-    fab.style.display = 'none';
-  }
+  if (fabActions[page]) { fab.style.display = 'flex'; fab.onclick = fabActions[page]; }
+  else { fab.style.display = 'none'; }
   window.scrollTo(0, 0);
+  if (page === 'chart' && !chartStarted) startChartDemo();
+}
+
+document.getElementById('bottomNav').addEventListener('click', (e) => {
+  const btn = e.target.closest('button[data-page]');
+  if (!btn) return;
+  goToPage(btn.dataset.page);
 });
 
 function showToast(msg) {
@@ -615,9 +740,16 @@ async function setStudentStatus(uid, status) {
   loadDashboard();
 }
 
+let currentStudentId = null;
+
 function viewStudent(uid) {
   const s = studentsCache.find(x => x.id === uid);
   if (!s) return;
+  currentStudentId = uid;
+  document.getElementById('studentSheetTitle').textContent = 'Student Details';
+  document.getElementById('studentModalBody').classList.remove('sheet-hidden');
+  document.getElementById('studentEditFields').classList.remove('sheet-visible');
+  document.getElementById('studentEditToggleBtn').textContent = 'Edit Profile';
   document.getElementById('studentModalBody').innerHTML = `
     ${s.photoUrl ? `<img class="thumb" style="width:88px;height:88px; border-radius:16px;" src="${s.photoUrl}" onclick="openImgZoom('${s.photoUrl}')" />` : ''}
     <p><b>Name:</b> ${s.studentName || '—'}</p>
@@ -632,9 +764,52 @@ function viewStudent(uid) {
     <p><b>Analyses Run:</b> ${s.analysesRun || 0}</p>
     ${s.idCardPhotoUrl ? `<p><b>ID Card Photo:</b><br/><img class="thumb" style="width:170px;height:106px; border-radius:12px;" src="${s.idCardPhotoUrl}" onclick="openImgZoom('${s.idCardPhotoUrl}')" /></p>` : ''}
   `;
+
+  document.getElementById('editStudentName').value = s.studentName || '';
+  document.getElementById('editFatherName').value = s.fatherName || '';
+  document.getElementById('editIdCardNumber').value = s.studentIdCardNumber || '';
+  document.getElementById('editFatherAddress').value = s.fatherAddress || '';
+  document.getElementById('editQualification').value = s.qualification || '';
+  document.getElementById('editPhone').value = s.phone || '';
+  document.getElementById('editSubStatus').value = s.subscriptionStatus || 'pending';
+
   document.getElementById('studentModalBackdrop').style.display = 'flex';
 }
-function closeStudentModal() { document.getElementById('studentModalBackdrop').style.display = 'none'; }
+
+function toggleStudentEdit() {
+  const viewMode = document.getElementById('studentModalBody');
+  const editMode = document.getElementById('studentEditFields');
+  const btn = document.getElementById('studentEditToggleBtn');
+  const isCurrentlyEditing = editMode.classList.contains('sheet-visible');
+  if (isCurrentlyEditing) {
+    saveStudentEdit();
+  } else {
+    viewMode.classList.add('sheet-hidden');
+    editMode.classList.add('sheet-visible');
+    document.getElementById('studentSheetTitle').textContent = 'Edit Student Profile';
+    btn.textContent = 'Save Changes';
+  }
+}
+
+async function saveStudentEdit() {
+  if (!currentStudentId) return;
+  const payload = {
+    studentName: document.getElementById('editStudentName').value,
+    fatherName: document.getElementById('editFatherName').value,
+    studentIdCardNumber: document.getElementById('editIdCardNumber').value,
+    fatherAddress: document.getElementById('editFatherAddress').value,
+    qualification: document.getElementById('editQualification').value,
+    phone: document.getElementById('editPhone').value,
+    subscriptionStatus: document.getElementById('editSubStatus').value,
+  };
+  await db.collection('students').doc(currentStudentId).update(payload);
+  showToast('Profile updated');
+  closeStudentModal();
+  loadStudents();
+  loadDashboard();
+}
+
+function closeStudentModal() { document.getElementById('studentModalBackdrop').style.display = 'none'; currentStudentId = null; }
 
 // ---------------------------------------------------------------------
 // Payments
@@ -708,11 +883,23 @@ let selectedCourseId = null;
 
 function openCourseSheet() { document.getElementById('courseModalBackdrop').style.display = 'flex'; }
 function closeCourseSheet() { document.getElementById('courseModalBackdrop').style.display = 'none'; }
-function openLessonSheet() {
+let editingLessonId = null;
+
+function openLessonSheet(lesson) {
   if (!selectedCourseId) { showToast('Select a course first'); return; }
+  editingLessonId = lesson ? lesson.id : null;
+  document.getElementById('lessonSheetTitle').textContent = lesson ? 'Edit Lesson' : 'Add Lesson';
+  document.getElementById('lessonSaveBtn').textContent = lesson ? 'Save Changes' : 'Add Lesson';
+  document.getElementById('lessonTitle').value = lesson ? (lesson.title || '') : '';
+  document.getElementById('lessonTitleUr').value = lesson ? (lesson.titleUrdu || '') : '';
+  document.getElementById('lessonContent').value = lesson ? (lesson.contentText || '') : '';
+  document.getElementById('lessonContentUr').value = lesson ? (lesson.contentTextUrdu || '') : '';
+  document.getElementById('lessonYoutube').value = lesson ? (lesson.youtubeVideoId || '') : '';
+  document.getElementById('lessonPdf').value = lesson ? (lesson.pdfUrl || '') : '';
+  document.getElementById('lessonOrder').value = lesson ? (lesson.order || 1) : 1;
   document.getElementById('lessonModalBackdrop').style.display = 'flex';
 }
-function closeLessonSheet() { document.getElementById('lessonModalBackdrop').style.display = 'none'; }
+function closeLessonSheet() { document.getElementById('lessonModalBackdrop').style.display = 'none'; editingLessonId = null; }
 
 async function loadCourses() {
   const snap = await db.collection('courses').orderBy('order').get();
@@ -777,16 +964,19 @@ async function loadLessons(courseId) {
   list.innerHTML = lessons.map(l => `
     <div class="lesson-item">
       <div class="t">${l.title} ${l.youtubeVideoId ? '🎬' : ''} ${l.pdfUrl ? '📄' : ''}</div>
-      <button class="small danger" onclick="deleteLesson('${courseId}','${l.id}')">Delete</button>
+      <div class="row-actions">
+        <button class="small secondary" onclick='openLessonSheet(${JSON.stringify(l).replace(/'/g, "&apos;")})'>Edit</button>
+        <button class="small danger" onclick="deleteLesson('${courseId}','${l.id}')">Delete</button>
+      </div>
     </div>
   `).join('');
 }
 
-async function createLesson() {
+async function saveLesson() {
   if (!selectedCourseId) return;
   const title = document.getElementById('lessonTitle').value;
   if (!title) { showToast('Lesson title is required'); return; }
-  await db.collection('courses').doc(selectedCourseId).collection('lessons').add({
+  const payload = {
     courseId: selectedCourseId,
     title,
     titleUrdu: document.getElementById('lessonTitleUr').value,
@@ -795,8 +985,14 @@ async function createLesson() {
     youtubeVideoId: document.getElementById('lessonYoutube').value,
     pdfUrl: document.getElementById('lessonPdf').value,
     order: parseInt(document.getElementById('lessonOrder').value || '1'),
-  });
-  showToast('Lesson added');
+  };
+  if (editingLessonId) {
+    await db.collection('courses').doc(selectedCourseId).collection('lessons').doc(editingLessonId).update(payload);
+    showToast('Lesson updated');
+  } else {
+    await db.collection('courses').doc(selectedCourseId).collection('lessons').add(payload);
+    showToast('Lesson added');
+  }
   ['lessonTitle','lessonTitleUr','lessonContent','lessonContentUr','lessonYoutube','lessonPdf'].forEach(id => document.getElementById(id).value = '');
   closeLessonSheet();
   loadLessons(selectedCourseId);
@@ -809,8 +1005,146 @@ async function deleteLesson(courseId, lessonId) {
 }
 
 // ---------------------------------------------------------------------
-// Config (QR code, price, WhatsApp, Groq key)
+// Candlestick Chart Demo (Canvas — no external libs)
 // ---------------------------------------------------------------------
+
+let chartStarted = false;
+let chartData = [];
+let chartInterval = null;
+let basePrice = 2385.40;
+
+function genCandle(prevClose) {
+  const volatility = prevClose * 0.0012;
+  const open = prevClose;
+  const close = open + (Math.random() - 0.5) * volatility * 2;
+  const high = Math.max(open, close) + Math.random() * volatility;
+  const low = Math.min(open, close) - Math.random() * volatility;
+  return { open, high, low, close };
+}
+
+function initChartData() {
+  chartData = [];
+  let price = basePrice;
+  for (let i = 0; i < 40; i++) {
+    const c = genCandle(price);
+    chartData.push(c);
+    price = c.close;
+  }
+}
+
+function drawChart() {
+  const canvas = document.getElementById('candleCanvas');
+  if (!canvas || chartData.length === 0) return;
+  const dpr = window.devicePixelRatio || 1;
+  const rect = canvas.getBoundingClientRect();
+  canvas.width = rect.width * dpr;
+  canvas.height = rect.height * dpr;
+  const ctx = canvas.getContext('2d');
+  ctx.scale(dpr, dpr);
+  const W = rect.width, H = rect.height;
+  ctx.clearRect(0, 0, W, H);
+
+  const prices = chartData.flatMap(c => [c.high, c.low]);
+  const max = Math.max(...prices), min = Math.min(...prices);
+  const pad = (max - min) * 0.1 || 1;
+  const top = max + pad, bottom = min - pad;
+  const range = top - bottom;
+
+  // grid lines
+  ctx.strokeStyle = '#12191d';
+  ctx.lineWidth = 1;
+  for (let i = 0; i <= 4; i++) {
+    const y = (H / 4) * i;
+    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
+  }
+
+  const candleW = W / chartData.length;
+  const bodyW = Math.max(candleW * 0.55, 2);
+
+  chartData.forEach((c, i) => {
+    const x = i * candleW + candleW / 2;
+    const yOpen = H - ((c.open - bottom) / range) * H;
+    const yClose = H - ((c.close - bottom) / range) * H;
+    const yHigh = H - ((c.high - bottom) / range) * H;
+    const yLow = H - ((c.low - bottom) / range) * H;
+    const up = c.close >= c.open;
+    const color = up ? '#34e39a' : '#ff5c6a';
+
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(x, yHigh); ctx.lineTo(x, yLow); ctx.stroke();
+
+    ctx.fillStyle = color;
+    const bodyTop = Math.min(yOpen, yClose);
+    const bodyH = Math.max(Math.abs(yClose - yOpen), 1.5);
+    ctx.fillRect(x - bodyW / 2, bodyTop, bodyW, bodyH);
+  });
+}
+
+function updateChartHeader() {
+  const last = chartData[chartData.length - 1];
+  const first = chartData[0];
+  if (!last) return;
+  const change = last.close - first.open;
+  const changePct = (change / first.open) * 100;
+  document.getElementById('chartPrice').textContent = last.close.toFixed(2);
+  const changeEl = document.getElementById('chartChange');
+  changeEl.textContent = (change >= 0 ? '▲ ' : '▼ ') + Math.abs(change).toFixed(2) + ' (' + changePct.toFixed(2) + '%)';
+  changeEl.style.color = change >= 0 ? '#34e39a' : '#ff5c6a';
+}
+
+function startChartDemo() {
+  chartStarted = true;
+  initChartData();
+  drawChart();
+  updateChartHeader();
+  renderTicker();
+  if (chartInterval) clearInterval(chartInterval);
+  chartInterval = setInterval(() => {
+    const prev = chartData[chartData.length - 1];
+    const next = genCandle(prev.close);
+    chartData.push(next);
+    if (chartData.length > 40) chartData.shift();
+    drawChart();
+    updateChartHeader();
+    renderTicker();
+  }, 1800);
+}
+
+document.getElementById('chartFilter').addEventListener('click', (e) => {
+  const btn = e.target.closest('button[data-tf]');
+  if (!btn) return;
+  document.querySelectorAll('#chartFilter button').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  initChartData();
+  drawChart();
+  updateChartHeader();
+});
+
+const tickerSymbols = ['EUR/USD', 'GBP/USD', 'BTC/USD', 'XAU/USD', 'US30'];
+function renderTicker() {
+  const list = document.getElementById('tickerList');
+  if (!list) return;
+  list.innerHTML = tickerSymbols.map(sym => {
+    const change = (Math.random() - 0.5) * 1.4;
+    const price = (sym === 'BTC/USD' ? 64000 + Math.random() * 2000 : sym === 'US30' ? 39500 + Math.random() * 300 : sym === 'XAU/USD' ? 2385 + Math.random() * 10 : 1 + Math.random() * 0.5);
+    const up = change >= 0;
+    return `
+      <div class="row-card" style="cursor:default;">
+        <div class="thumb-fallback">${up ? '📈' : '📉'}</div>
+        <div class="info">
+          <div class="name">${sym}</div>
+          <div class="meta">${price.toFixed(sym.includes('USD') && sym !== 'BTC/USD' && sym !== 'XAU/USD' && sym !== 'US30' ? 4 : 2)}</div>
+        </div>
+        <div class="side">
+          <span class="badge ${up ? 'active' : 'expired'}">${up ? '+' : ''}${change.toFixed(2)}%</span>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+window.addEventListener('resize', () => { if (chartStarted) drawChart(); });
 
 async function loadConfig() {
   const snap = await db.collection('config').doc('app').get();
