@@ -1,4 +1,4 @@
-vname: Build MI Trade Master APK
+name: Build MI Trade Master APK
 
 on:
   push:
@@ -50,6 +50,9 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
+      - name: Print debug SHA-1 (needed for Google Sign-In in Firebase Console)
+        run: ./gradlew signingReport --stacktrace | grep -A 3 "Variant: debug" || ./gradlew signingReport --stacktrace
+
       - name: Build debug APK
         run: ./gradlew assembleDebug --stacktrace
         env:
@@ -59,23 +62,27 @@ jobs:
         run: |
           mkdir -p app/build/outputs/apk/debug/release
           cp app/build/outputs/apk/debug/app-debug.apk \
-             app/build/outputs/apk/debug/release/MI-Trade-Master-v1.0.${{ github.run_number }}.apk
+             app/build/outputs/apk/debug/release/MI-Trade-Master-v3.0.${{ github.run_number }}.apk
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: mi-trade-master-apk
-          path: android-app/app/build/outputs/apk/debug/release/MI-Trade-Master-v1.0.${{ github.run_number }}.apk
+          path: android-app/app/build/outputs/apk/debug/release/MI-Trade-Master-v3.0.${{ github.run_number }}.apk
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.0.${{ github.run_number }}
-          name: MI Trade Master v1.0.${{ github.run_number }}
+          tag_name: v3.0.${{ github.run_number }}
+          name: MI Trade Master v3.0.${{ github.run_number }}
           body: |
             Automated build from commit ${{ github.sha }}.
 
             Install: download the APK below, allow "install from unknown sources" on your device, and open it.
-          files: android-app/app/build/outputs/apk/debug/release/MI-Trade-Master-v1.0.${{ github.run_number }}.apk
+
+            ⚠️ If Google/GitHub Sign-In fails, check this run's log for the
+            "Print debug SHA-1" step and make sure that fingerprint is added
+            in Firebase Console → Project Settings → Your apps.
+          files: android-app/app/build/outputs/apk/debug/release/MI-Trade-Master-v3.0.${{ github.run_number }}.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
