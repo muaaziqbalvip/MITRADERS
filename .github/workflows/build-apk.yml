@@ -79,9 +79,9 @@ jobs:
 
             Install: download the APK below, allow "install from unknown sources" on your device, and open it.
 
-            ⚠️ If Google/GitHub Sign-In fails, check this run's log for the
+            If Google/GitHub Sign-In fails, check this run's log for the
             "Print debug SHA-1" step and make sure that fingerprint is added
-            in Firebase Console → Project Settings → Your apps.
+            in Firebase Console  Project Settings  Your apps.
           files: android-app/app/build/outputs/apk/debug/release/MI-Trade-Master-v3.0.${{ github.run_number }}.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
