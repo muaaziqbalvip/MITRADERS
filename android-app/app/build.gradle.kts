@@ -21,7 +21,6 @@ android {
         buildConfigField("String", "IMGBB_API_KEY", "\"6bdb23b28e7581721b28e46ce313308b\"")
 
         // GitHub OAuth Web Client ID — required by Firebase Auth GitHub provider flow
-        resValue("string", "default_web_client_id", "\"REPLACE_WITH_YOUR_WEB_CLIENT_ID\"")
     }
 
     buildTypes {
