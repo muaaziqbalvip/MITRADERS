@@ -75,21 +75,21 @@ jobs:
       - name: Rename APK with version and run number
         run: |
           mkdir -p app/build/outputs/apk/debug/release
-          cp app/build/outputs/apk/debug/app-debug.apk app/build/outputs/apk/debug/release/MI-Trade-Master-v3.0.${{ github.run_number }}.apk
+          cp app/build/outputs/apk/debug/app-debug.apk app/build/outputs/apk/debug/release/MI-Trade-Master-v4.0.${{ github.run_number }}.apk
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: mi-trade-master-apk
-          path: android-app/app/build/outputs/apk/debug/release/MI-Trade-Master-v3.0.${{ github.run_number }}.apk
+          path: android-app/app/build/outputs/apk/debug/release/MI-Trade-Master-v4.0.${{ github.run_number }}.apk
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tag_name: v3.0.${{ github.run_number }}
-          name: MI Trade Master v3.0.${{ github.run_number }}
+          tag_name: v4.0.${{ github.run_number }}
+          name: MI Trade Master v4.0.${{ github.run_number }}
           body: |
             Automated build from commit ${{ github.sha }}.
 
@@ -97,4 +97,4 @@ jobs:
 
             SHA-1 Fingerprint (fixed, same every build):
             E3:B0:75:C4:B6:E6:0A:CB:82:1E:15:CE:0B:9E:74:28:FD:65:61:65
-          files: android-app/app/build/outputs/apk/debug/release/MI-Trade-Master-v3.0.${{ github.run_number }}.apk
+          files: android-app/app/build/outputs/apk/debug/release/MI-Trade-Master-v4.0.${{ github.run_number }}.apk
