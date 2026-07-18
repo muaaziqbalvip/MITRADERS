@@ -5,6 +5,7 @@ import android.content.Intent
 import android.media.projection.MediaProjectionManager
 import android.os.Bundle
 import android.widget.Toast
+import androidx.activity.ComponentActivity
 import androidx.activity.result.contract.ActivityResultContracts
 
 /**
@@ -14,13 +15,17 @@ import androidx.activity.result.contract.ActivityResultContracts
  * which is why the floating-bubble capture button was failing to get
  * permission before this activity existed.
  *
+ * Extends ComponentActivity (not plain Activity) because
+ * registerForActivityResult is part of the AndroidX Activity Result API,
+ * which is only available on ComponentActivity and its subclasses.
+ *
  * Launched from OverlayBubbleService's "Capture & Analyze" button (via a
  * FLAG_ACTIVITY_NEW_TASK intent, since services can't start activities
  * without that flag) or from the Home screen the first time. Once the
  * user grants permission, the result is forwarded to ScreenCaptureService
  * and this activity immediately finishes.
  */
-class ScreenCaptureConsentActivity : Activity() {
+class ScreenCaptureConsentActivity : ComponentActivity() {
 
     private val requestScreenCapture = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         if (result.resultCode == Activity.RESULT_OK && result.data != null) {
