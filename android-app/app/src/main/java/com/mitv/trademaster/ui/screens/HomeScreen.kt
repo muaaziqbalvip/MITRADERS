@@ -29,7 +29,11 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.mitv.trademaster.data.AuthRepository
 import com.mitv.trademaster.data.FirestoreRepository
+import com.mitv.trademaster.data.SessionRepository
+import com.mitv.trademaster.data.SessionState
 import com.mitv.trademaster.data.model.Announcement
+import com.mitv.trademaster.data.model.Course
+import com.mitv.trademaster.data.model.Lesson
 import com.mitv.trademaster.data.model.StudentProfile
 import com.mitv.trademaster.overlay.OverlayBubbleService
 import com.mitv.trademaster.ui.theme.*
@@ -43,21 +47,40 @@ private val announcementIcons: Map<String, ImageVector> = mapOf(
 )
 
 @Composable
-fun HomeScreen(language: String) {
+fun HomeScreen(language: String, onContinueLesson: (Course, Lesson) -> Unit = { _, _ -> }) {
     val context = LocalContext.current
     val authRepo = remember { AuthRepository(context) }
     val firestoreRepo = remember { FirestoreRepository() }
+    val sessionRepo = remember { SessionRepository(context) }
+    val session by sessionRepo.session.collectAsState(initial = SessionState())
     val scope = rememberCoroutineScope()
 
     var profile by remember { mutableStateOf<StudentProfile?>(null) }
     var announcements by remember { mutableStateOf<List<Announcement>>(emptyList()) }
     var overlayActive by remember { mutableStateOf(false) }
+    var continueCourse by remember { mutableStateOf<Course?>(null) }
+    var continueLesson by remember { mutableStateOf<Lesson?>(null) }
 
     LaunchedEffect(Unit) {
         val uid = authRepo.currentUser?.uid ?: return@LaunchedEffect
         profile = try { firestoreRepo.getStudentProfile(uid) } catch (e: Exception) { null }
         announcements = try { firestoreRepo.getAnnouncements() } catch (e: Exception) { emptyList() }
         scope.launch { runCatching { firestoreRepo.updateLastActive(uid) } }
+    }
+
+    // Resolve "continue where you left off" — most recently viewed lesson across all courses.
+    LaunchedEffect(session.lastLessonByCourse) {
+        val entry = session.lastLessonByCourse.entries.firstOrNull() ?: return@LaunchedEffect
+        val (courseId, lessonId) = entry
+        val courses = try { firestoreRepo.getCourses() } catch (e: Exception) { emptyList() }
+        val course = courses.find { it.id == courseId } ?: return@LaunchedEffect
+        val lessons = try { firestoreRepo.getLessons(courseId) } catch (e: Exception) { emptyList() }
+        val lesson = lessons.find { it.id == lessonId } ?: return@LaunchedEffect
+        // Only show as "continue" if not already fully completed.
+        if (lesson.id !in session.completedLessonIds || lessons.any { it.id !in session.completedLessonIds }) {
+            continueCourse = course
+            continueLesson = lesson
+        }
     }
 
     Column(
@@ -91,6 +114,41 @@ fun HomeScreen(language: String) {
                 if (isActive) (if (language == "ur") "فعال رکنیت" else "Active Subscription") else (if (language == "ur") "رکنیت زیر التوا" else "Subscription Pending"),
                 color = if (isActive) BrandGreen else BrandRed, fontSize = 12.sp, fontWeight = FontWeight.SemiBold
             )
+        }
+
+        // ---------- Continue where you left off ----------
+        if (continueCourse != null && continueLesson != null) {
+            Spacer(Modifier.height(18.dp))
+            Card(
+                colors = CardDefaults.cardColors(containerColor = Color.Transparent),
+                shape = RoundedCornerShape(18.dp),
+                modifier = Modifier.fillMaxWidth().clickable { onContinueLesson(continueCourse!!, continueLesson!!) }
+            ) {
+                Box(
+                    modifier = Modifier.fillMaxWidth()
+                        .background(Brush.horizontalGradient(listOf(BrandGreen.copy(alpha = 0.16f), PanelDark)), RoundedCornerShape(18.dp))
+                        .padding(16.dp)
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(
+                            modifier = Modifier.size(44.dp).background(BrandGreen.copy(alpha = 0.18f), RoundedCornerShape(14.dp)),
+                            contentAlignment = Alignment.Center
+                        ) { Icon(Icons.Filled.PlayCircle, contentDescription = null, tint = BrandGreen) }
+                        Spacer(Modifier.width(12.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                if (language == "ur") "جہاں سے چھوڑا وہاں سے جاری رکھیں" else "Continue where you left off",
+                                color = BrandSilverDim, fontSize = 11.sp
+                            )
+                            Text(
+                                if (language == "ur" && continueLesson!!.titleUrdu.isNotBlank()) continueLesson!!.titleUrdu else continueLesson!!.title,
+                                color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1
+                            )
+                        }
+                        Icon(Icons.Filled.ChevronRight, contentDescription = null, tint = BrandGreen)
+                    }
+                }
+            }
         }
 
         // Announcements — admin controlled, only shown if any exist

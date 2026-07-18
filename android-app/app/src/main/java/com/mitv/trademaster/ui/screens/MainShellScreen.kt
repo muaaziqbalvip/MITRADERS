@@ -34,6 +34,7 @@ private val tabs = listOf(Tab.Home, Tab.Analyzer, Tab.Learn, Tab.Practice, Tab.M
 fun MainShellScreen(language: String, onLanguageChanged: (String) -> Unit, onSignedOut: () -> Unit, initialDeepLink: String? = null) {
     val navController = rememberNavController()
     var selectedCourse by remember { mutableStateOf<Course?>(null) }
+    var pendingResumeLessonId by remember { mutableStateOf<String?>(null) }
     var showMoreSheet by remember { mutableStateOf(false) }
     var moreDestination by remember { mutableStateOf<String?>(null) }
 
@@ -106,13 +107,27 @@ fun MainShellScreen(language: String, onLanguageChanged: (String) -> Unit, onSig
                 }
             } else {
                 NavHost(navController = navController, startDestination = Tab.Home.route) {
-                    composable(Tab.Home.route) { HomeScreen(language) }
+                    composable(Tab.Home.route) {
+                        HomeScreen(
+                            language = language,
+                            onContinueLesson = { course, lesson ->
+                                selectedCourse = course
+                                pendingResumeLessonId = lesson.id
+                                navController.navigate(Tab.Learn.route)
+                            }
+                        )
+                    }
                     composable(Tab.Analyzer.route) { AnalyzerScreen() }
                     composable(Tab.Learn.route) {
                         if (selectedCourse == null) {
                             CoursesScreen(language) { course -> selectedCourse = course }
                         } else {
-                            LessonDetailScreen(course = selectedCourse!!, language = language, onBack = { selectedCourse = null })
+                            LessonDetailScreen(
+                                course = selectedCourse!!,
+                                language = language,
+                                onBack = { selectedCourse = null; pendingResumeLessonId = null },
+                                resumeLessonId = pendingResumeLessonId
+                            )
                         }
                     }
                     composable(Tab.Practice.route) { PracticeScreen(language) }

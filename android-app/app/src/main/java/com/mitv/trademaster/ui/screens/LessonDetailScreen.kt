@@ -2,11 +2,15 @@ package com.mitv.trademaster.ui.screens
 
 import android.content.Intent
 import android.net.Uri
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -15,6 +19,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
@@ -25,6 +30,8 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.mitv.trademaster.data.AuthRepository
 import com.mitv.trademaster.data.FirestoreRepository
+import com.mitv.trademaster.data.SessionRepository
+import com.mitv.trademaster.data.SessionState
 import com.mitv.trademaster.data.model.Course
 import com.mitv.trademaster.data.model.Lesson
 import com.mitv.trademaster.ui.theme.*
@@ -33,31 +40,76 @@ import com.pierfrancescosoffritti.androidyoutubeplayer.core.player.listeners.Abs
 import com.pierfrancescosoffritti.androidyoutubeplayer.core.player.views.YouTubePlayerView as YTPlayerView
 import kotlinx.coroutines.launch
 
+/**
+ * If [resumeLessonId] is provided (e.g. from Home's "Continue where you left
+ * off" card), that lesson opens first instead of lesson #1.
+ */
 @Composable
-fun LessonDetailScreen(course: Course, language: String, onBack: () -> Unit) {
+fun LessonDetailScreen(course: Course, language: String, onBack: () -> Unit, resumeLessonId: String? = null) {
     val context = LocalContext.current
     val repo = remember { FirestoreRepository() }
     val authRepo = remember { AuthRepository(context) }
+    val sessionRepo = remember { SessionRepository(context) }
+    val session by sessionRepo.session.collectAsState(initial = SessionState())
+
     var lessons by remember { mutableStateOf<List<Lesson>>(emptyList()) }
     var selectedLesson by remember { mutableStateOf<Lesson?>(null) }
     var showLessonList by remember { mutableStateOf(false) }
+    var justCompleted by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
     LaunchedEffect(course.id) {
-        lessons = try { repo.getLessons(course.id) } catch (e: Exception) { emptyList() }
-        selectedLesson = lessons.firstOrNull()
+        val loaded = try { repo.getLessons(course.id) } catch (e: Exception) { emptyList() }
+        lessons = loaded
+        val resumeTarget = resumeLessonId?.let { id -> loaded.find { it.id == id } }
+        selectedLesson = resumeTarget ?: loaded.firstOrNull()
     }
 
+    // Remember "last viewed lesson" for this course whenever the student switches lessons,
+    // so Home can show a "Continue where you left off" card.
+    LaunchedEffect(selectedLesson?.id) {
+        selectedLesson?.let { sessionRepo.setLastLesson(course.id, it.id) }
+        justCompleted = false
+    }
+
+    val completedCount = lessons.count { it.id in session.completedLessonIds }
+    val courseProgress = if (lessons.isNotEmpty()) completedCount.toFloat() / lessons.size else 0f
+    val animatedProgress by animateFloatAsState(targetValue = courseProgress, animationSpec = tween(500), label = "lessonProgress")
+
     Column(modifier = Modifier.fillMaxSize().background(BgBlack)) {
-        Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = onBack) { Icon(Icons.Filled.ArrowBack, contentDescription = null, tint = BrandSilver) }
-            Spacer(Modifier.width(4.dp))
-            Text(
-                if (language == "ur" && course.titleUrdu.isNotBlank()) course.titleUrdu else course.title,
-                color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp, modifier = Modifier.weight(1f)
-            )
-            if (lessons.size > 1) {
-                IconButton(onClick = { showLessonList = true }) { Icon(Icons.Filled.MenuBook, contentDescription = null, tint = BrandGreen) }
+        // ---------- Header with course progress bar ----------
+        Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                IconButton(onClick = onBack) { Icon(Icons.Filled.ArrowBack, contentDescription = null, tint = BrandSilver) }
+                Spacer(Modifier.width(2.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        if (language == "ur" && course.titleUrdu.isNotBlank()) course.titleUrdu else course.title,
+                        color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp
+                    )
+                    if (lessons.isNotEmpty()) {
+                        Text(
+                            "$completedCount/${lessons.size} " + (if (language == "ur") "مکمل" else "completed"),
+                            color = BrandSilverDim, fontSize = 10.sp
+                        )
+                    }
+                }
+                if (lessons.size > 1) {
+                    IconButton(onClick = { showLessonList = true }) { Icon(Icons.Filled.MenuBook, contentDescription = null, tint = BrandGreen) }
+                }
+            }
+            if (lessons.isNotEmpty()) {
+                Spacer(Modifier.height(8.dp))
+                Box(
+                    modifier = Modifier.fillMaxWidth().height(5.dp).clip(RoundedCornerShape(3.dp)).background(LineSubtle)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxHeight()
+                            .fillMaxWidth(animatedProgress.coerceIn(0f, 1f))
+                            .background(BrandGreen, RoundedCornerShape(3.dp))
+                    )
+                }
             }
         }
 
@@ -73,6 +125,13 @@ fun LessonDetailScreen(course: Course, language: String, onBack: () -> Unit) {
 
         selectedLesson?.let { lesson ->
             val lessonIndex = lessons.indexOf(lesson)
+            val isLessonDone = lesson.id in session.completedLessonIds
+            val wordCount = remember(lesson.id, language) {
+                val text = if (language == "ur" && lesson.contentTextUrdu.isNotBlank()) lesson.contentTextUrdu else lesson.contentText
+                text.split(Regex("\\s+")).count { it.isNotBlank() }
+            }
+            val readMinutes = (wordCount / 180).coerceAtLeast(1)
+
             LazyColumn(modifier = Modifier.weight(1f).padding(horizontal = 16.dp)) {
                 item {
                     if (lesson.youtubeVideoId.isNotBlank()) {
@@ -87,11 +146,23 @@ fun LessonDetailScreen(course: Course, language: String, onBack: () -> Unit) {
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Column(Modifier.padding(22.dp)) {
-                            // Chapter marker
-                            Text(
-                                (if (language == "ur") "سبق " else "Lesson ") + "${lessonIndex + 1} / ${lessons.size}",
-                                color = BrandGreenDim, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp
-                            )
+                            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                                Text(
+                                    (if (language == "ur") "سبق " else "Lesson ") + "${lessonIndex + 1} / ${lessons.size}",
+                                    color = BrandGreenDim, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                Icon(Icons.Filled.Schedule, contentDescription = null, tint = BrandSilverDim, modifier = Modifier.size(12.dp))
+                                Spacer(Modifier.width(3.dp))
+                                Text(
+                                    "$readMinutes " + (if (language == "ur") "منٹ" else "min read"),
+                                    color = BrandSilverDim, fontSize = 10.sp
+                                )
+                                if (isLessonDone) {
+                                    Spacer(Modifier.width(8.dp))
+                                    Icon(Icons.Filled.CheckCircle, contentDescription = null, tint = BrandGreen, modifier = Modifier.size(14.dp))
+                                }
+                            }
                             Spacer(Modifier.height(8.dp))
                             Text(
                                 if (language == "ur" && lesson.titleUrdu.isNotBlank()) lesson.titleUrdu else lesson.title,
@@ -102,7 +173,6 @@ fun LessonDetailScreen(course: Course, language: String, onBack: () -> Unit) {
                             Spacer(Modifier.height(16.dp))
 
                             val bodyText = if (language == "ur" && lesson.contentTextUrdu.isNotBlank()) lesson.contentTextUrdu else lesson.contentText
-                            // Book-style paragraphs: split on blank lines / newlines and render each with spacing
                             bodyText.split("\n").filter { it.isNotBlank() }.forEach { paragraph ->
                                 Text(
                                     paragraph.trim(),
@@ -139,18 +209,49 @@ fun LessonDetailScreen(course: Course, language: String, onBack: () -> Unit) {
                     }
 
                     Spacer(Modifier.height(20.dp))
+
+                    // Mark-complete button: reflects real completion state, celebrates on first completion.
                     Button(
                         onClick = {
+                            if (isLessonDone) return@Button
                             val uid = authRepo.currentUser?.uid ?: return@Button
-                            scope.launch { repo.incrementLessonsCompleted(uid) }
+                            scope.launch {
+                                val wasNew = sessionRepo.markLessonComplete(lesson.id)
+                                if (wasNew) {
+                                    repo.incrementLessonsCompleted(uid)
+                                    justCompleted = true
+                                }
+                            }
                         },
-                        colors = ButtonDefaults.buttonColors(containerColor = BrandGreen.copy(alpha = 0.15f), contentColor = BrandGreen),
+                        colors = if (isLessonDone)
+                            ButtonDefaults.buttonColors(containerColor = BrandGreen.copy(alpha = 0.9f), contentColor = Color(0xFF04120B))
+                        else
+                            ButtonDefaults.buttonColors(containerColor = BrandGreen.copy(alpha = 0.15f), contentColor = BrandGreen),
                         shape = RoundedCornerShape(12.dp),
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Icon(Icons.Filled.CheckCircle, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Icon(if (isLessonDone) Icons.Filled.CheckCircle else Icons.Filled.RadioButtonUnchecked, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(Modifier.width(8.dp))
-                        Text(if (language == "ur") "مکمل شدہ نشان زد کریں" else "Mark as Completed")
+                        Text(
+                            if (isLessonDone)
+                                (if (language == "ur") "مکمل ہو گیا ✓" else "Completed ✓")
+                            else
+                                (if (language == "ur") "مکمل شدہ نشان زد کریں" else "Mark as Completed")
+                        )
+                    }
+
+                    AnimatedVisibility(visible = justCompleted, enter = fadeIn(), exit = fadeOut()) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxWidth().padding(top = 10.dp)
+                        ) {
+                            Icon(Icons.Filled.EmojiEvents, contentDescription = null, tint = Color(0xFFE3B934), modifier = Modifier.size(16.dp))
+                            Spacer(Modifier.width(6.dp))
+                            Text(
+                                if (language == "ur") "شاباش! اگلے سبق کی طرف بڑھیں۔" else "Nice work! Ready for the next lesson.",
+                                color = Color(0xFFE3B934), fontSize = 12.sp
+                            )
+                        }
                     }
 
                     // Prev / Next navigation
@@ -184,6 +285,7 @@ fun LessonDetailScreen(course: Course, language: String, onBack: () -> Unit) {
     if (showLessonList) {
         LessonListSheet(
             lessons = lessons, selectedLesson = selectedLesson, language = language,
+            completedIds = session.completedLessonIds,
             onDismiss = { showLessonList = false },
             onSelect = { selectedLesson = it; showLessonList = false }
         )
@@ -192,13 +294,21 @@ fun LessonDetailScreen(course: Course, language: String, onBack: () -> Unit) {
 
 @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
-private fun LessonListSheet(lessons: List<Lesson>, selectedLesson: Lesson?, language: String, onDismiss: () -> Unit, onSelect: (Lesson) -> Unit) {
+private fun LessonListSheet(
+    lessons: List<Lesson>,
+    selectedLesson: Lesson?,
+    language: String,
+    completedIds: Set<String>,
+    onDismiss: () -> Unit,
+    onSelect: (Lesson) -> Unit
+) {
     ModalBottomSheet(onDismissRequest = onDismiss, containerColor = PanelDark) {
         Column(Modifier.padding(20.dp)) {
             Text(if (language == "ur") "اسباق" else "Lessons", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
             Spacer(Modifier.height(14.dp))
             lessons.forEachIndexed { i, l ->
                 val isSelected = l.id == selectedLesson?.id
+                val isDone = l.id in completedIds
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -207,12 +317,16 @@ private fun LessonListSheet(lessons: List<Lesson>, selectedLesson: Lesson?, lang
                         .padding(12.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Box(modifier = Modifier.size(8.dp).background(if (isSelected) BrandGreen else BrandSilverDim, CircleShape))
+                    if (isDone) {
+                        Icon(Icons.Filled.CheckCircle, contentDescription = null, tint = BrandGreen, modifier = Modifier.size(16.dp))
+                    } else {
+                        Box(modifier = Modifier.size(8.dp).background(if (isSelected) BrandGreen else BrandSilverDim, CircleShape))
+                    }
                     Spacer(Modifier.width(10.dp))
                     Text("${i + 1}. ", color = BrandSilverDim, fontSize = 12.sp)
                     Text(
                         if (language == "ur" && l.titleUrdu.isNotBlank()) l.titleUrdu else l.title,
-                        color = if (isSelected) BrandGreen else BrandSilver, fontSize = 13.sp, modifier = Modifier.weight(1f)
+                        color = if (isSelected) BrandGreen else if (isDone) BrandSilver else BrandSilver, fontSize = 13.sp, modifier = Modifier.weight(1f)
                     )
                 }
             }
@@ -259,7 +373,7 @@ private fun YouTubeEmbedWithFallback(videoId: String, language: String) {
     }
 
     AndroidView(
-        modifier = Modifier.fillMaxWidth().height(200.dp),
+        modifier = Modifier.fillMaxWidth().height(200.dp).clip(RoundedCornerShape(16.dp)),
         factory = { ctx ->
             YTPlayerView(ctx).apply {
                 lifecycleOwner.lifecycle.addObserver(this)
@@ -271,8 +385,6 @@ private fun YouTubeEmbedWithFallback(videoId: String, language: String) {
                         youTubePlayer: com.pierfrancescosoffritti.androidyoutubeplayer.core.player.YouTubePlayer,
                         error: PlayerConstants.PlayerError
                     ) {
-                        // Video unavailable, embedding disabled, or region-restricted.
-                        // Fall back to an "open on YouTube" link instead of a broken player.
                         hasError = true
                     }
                 })
