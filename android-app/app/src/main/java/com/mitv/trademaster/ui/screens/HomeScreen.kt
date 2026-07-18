@@ -4,7 +4,6 @@ import android.content.Intent
 import android.net.Uri
 import android.provider.Settings
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -16,6 +15,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -58,7 +58,8 @@ fun HomeScreen(language: String, onContinueLesson: (Course, Lesson) -> Unit = { 
 
     var profile by remember { mutableStateOf<StudentProfile?>(null) }
     var announcements by remember { mutableStateOf<List<Announcement>>(emptyList()) }
-    var overlayActive by remember { mutableStateOf(false) }
+    val overlayActive by com.mitv.trademaster.overlay.OverlayBubbleService.isRunning.collectAsState()
+    val captureActive by com.mitv.trademaster.overlay.ScreenCaptureService.isActive.collectAsState()
     var continueCourse by remember { mutableStateOf<Course?>(null) }
     var continueLesson by remember { mutableStateOf<Lesson?>(null) }
 
@@ -190,11 +191,22 @@ fun HomeScreen(language: String, onContinueLesson: (Course, Lesson) -> Unit = { 
                             return@Button
                         }
                         if (overlayActive) {
+                            // Stop the full session — both bubble and capture — so the
+                            // next Start always does a clean permission handshake.
                             context.stopService(Intent(context, OverlayBubbleService::class.java))
-                            overlayActive = false
-                        } else {
+                            context.stopService(Intent(context, com.mitv.trademaster.overlay.ScreenCaptureService::class.java))
+                        } else if (captureActive) {
+                            // Screen-capture permission is already granted this session
+                            // (e.g. bubble was closed but capture kept running) — just
+                            // bring the bubble back, no need to ask again.
                             context.startService(Intent(context, OverlayBubbleService::class.java))
-                            overlayActive = true
+                        } else {
+                            // Cold start: the ONE place permission is ever requested.
+                            // This activity starts both services in the right order.
+                            context.startActivity(
+                                Intent(context, com.mitv.trademaster.overlay.ScreenCaptureConsentActivity::class.java)
+                                    .apply { flags = Intent.FLAG_ACTIVITY_NEW_TASK }
+                            )
                         }
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = if (overlayActive) BrandRed.copy(alpha = 0.15f) else BrandGreen),

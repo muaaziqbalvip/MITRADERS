@@ -5,7 +5,6 @@ import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
 import android.graphics.Bitmap
-import android.graphics.BitmapFactory
 import android.graphics.Color
 import android.graphics.PixelFormat
 import android.graphics.drawable.GradientDrawable
@@ -26,19 +25,28 @@ import com.mitv.trademaster.analysis.Direction
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 import kotlin.math.abs
 
 /**
- * Floating overlay: a small round bubble showing the app icon that expands
- * into an analysis panel with a Capture & Analyze button, a result
- * indicator, and an explicit Close button that stops the whole service.
+ * Floating overlay: a small round bubble that expands into an analysis
+ * panel with a Capture & Analyze button, a live signal indicator, and a
+ * Close button that stops the whole analyzer session.
  *
- * v2 simplification (per product decision): the old "auto-tap at a saved
- * screen position" toggle has been removed. The panel now only ever shows
- * an analysis result — it does not interact with any other app's UI.
+ * IMPORTANT — permission contract: by the time this service is ever
+ * started, [ScreenCaptureService] MUST already be running with an active
+ * MediaProjection. That handshake happens exactly once, in
+ * [ScreenCaptureConsentActivity]. This service NEVER requests permission
+ * itself — that's what caused the old "asks every time" bug. If the frame
+ * isn't ready yet it just waits a moment; it does not re-prompt.
  */
 class OverlayBubbleService : Service() {
+
+    companion object {
+        /** Reflects whether the floating analyzer bubble is currently on screen. */
+        val isRunning = MutableStateFlow(false)
+    }
 
     private lateinit var windowManager: WindowManager
     private var bubbleView: View? = null
@@ -52,6 +60,7 @@ class OverlayBubbleService : Service() {
         prefs = getSharedPreferences("mitv_overlay", Context.MODE_PRIVATE)
         startForegroundNotification()
         addBubble()
+        isRunning.value = true
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int = START_STICKY
@@ -156,7 +165,6 @@ class OverlayBubbleService : Service() {
             }
         }
 
-        // Header row: title + close button
         val headerRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
@@ -175,7 +183,11 @@ class OverlayBubbleService : Service() {
         closeBtn.setOnTouchListener { v, event ->
             if (event.action == MotionEvent.ACTION_UP) {
                 v.performClick()
-                stopSelf() // fully closes the overlay + service
+                // Stop the WHOLE analyzer session (bubble + capture), so the next
+                // "Start" from Home does a clean handshake rather than resuming
+                // a half-torn-down state.
+                stopService(Intent(this, ScreenCaptureService::class.java))
+                stopSelf()
             }
             true
         }
@@ -225,7 +237,7 @@ class OverlayBubbleService : Service() {
         captureBtn.setOnTouchListener { v, event ->
             if (event.action == MotionEvent.ACTION_UP) {
                 v.performClick()
-                runAnalysis(signalDot, signalLabel)
+                runAnalysis(signalDot, signalLabel, captureBtn)
             }
             true
         }
@@ -243,54 +255,41 @@ class OverlayBubbleService : Service() {
         isPanelExpanded = true
     }
 
-    private fun runAnalysis(signalDot: View, signalLabel: TextView) {
+    /**
+     * Reads the current screen frame and runs analysis on it. Never requests
+     * permission — by contract, capture is already active by the time the
+     * bubble exists. If the very first frame hasn't landed yet (a few
+     * hundred ms right after starting), this waits briefly instead of
+     * treating it as a permission problem.
+     */
+    private fun runAnalysis(signalDot: View, signalLabel: TextView, captureBtn: TextView) {
         val bitmap = ScreenCaptureService.latestFrame
         if (bitmap != null) {
-            analyzeBitmap(bitmap, signalDot, signalLabel)
+            analyzeBitmap(bitmap, signalDot, signalLabel, captureBtn)
             return
         }
 
-        if (!ScreenCaptureService.isActive) {
-            // Permission truly never granted (or service was killed) — ask once.
-            signalLabel.text = "  Tap again after granting screen permission..."
-            val consentIntent = Intent(this, ScreenCaptureConsentActivity::class.java).apply {
-                flags = Intent.FLAG_ACTIVITY_NEW_TASK
-            }
-            startActivity(consentIntent)
-            return
-        }
-
-        // Permission already granted, service is running — the first frame just
-        // hasn't arrived yet. Retry briefly instead of asking for permission again.
+        captureBtn.isEnabled = false
         signalLabel.text = "  Reading screen…"
         CoroutineScope(Dispatchers.Default).launch {
             var frame: Bitmap? = null
             repeat(15) {
                 delay(200)
-                // Bail out early if the projection got revoked mid-wait (e.g.
-                // user tapped "Stop" on the system capture notification) so we
-                // fall back to re-requesting consent instead of timing out.
-                if (!ScreenCaptureService.isActive) return@repeat
                 frame = ScreenCaptureService.latestFrame
                 if (frame != null) return@repeat
             }
+            captureBtn.post { captureBtn.isEnabled = true }
             if (frame != null) {
-                analyzeBitmap(frame!!, signalDot, signalLabel)
-            } else if (!ScreenCaptureService.isActive) {
-                signalLabel.post {
-                    signalLabel.text = "  Tap again after granting screen permission..."
-                    val consentIntent = Intent(this@OverlayBubbleService, ScreenCaptureConsentActivity::class.java).apply {
-                        flags = Intent.FLAG_ACTIVITY_NEW_TASK
-                    }
-                    startActivity(consentIntent)
-                }
+                analyzeBitmap(frame!!, signalDot, signalLabel, captureBtn)
             } else {
-                signalLabel.post { signalLabel.text = "  Couldn't read screen, try again" }
+                signalLabel.post { signalLabel.text = "  Couldn't read screen — try again" }
             }
         }
     }
 
-    private fun analyzeBitmap(bitmap: Bitmap, signalDot: View, signalLabel: TextView) {
+    private fun analyzeBitmap(bitmap: Bitmap, signalDot: View, signalLabel: TextView, captureBtn: TextView) {
+        captureBtn.isEnabled = false
+        signalLabel.text = "  Analyzing…"
         CoroutineScope(Dispatchers.Default).launch {
             val result = ChartAnalyzer.analyze(bitmap)
             val color = when (result.direction) {
@@ -306,6 +305,7 @@ class OverlayBubbleService : Service() {
             signalDot.post {
                 (signalDot.background as GradientDrawable).setColor(color)
                 signalLabel.text = text
+                captureBtn.isEnabled = true
             }
         }
     }
@@ -318,5 +318,6 @@ class OverlayBubbleService : Service() {
         super.onDestroy()
         bubbleView?.let { runCatching { windowManager.removeView(it) } }
         panelView?.let { runCatching { windowManager.removeView(it) } }
+        isRunning.value = false
     }
 }

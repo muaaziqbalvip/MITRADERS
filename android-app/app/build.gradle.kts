@@ -96,8 +96,10 @@ dependencies {
     implementation("io.coil-kt:coil-compose:2.6.0")
     implementation("io.coil-kt:coil-svg:2.6.0")
 
-    // YouTube lecture embedding
-    implementation("com.pierfrancescosoffritti.androidyoutubeplayer:core:12.1.2")
+    // Custom MP4 lesson video player (admin sets direct MP4 links per language)
+    implementation("androidx.media3:media3-exoplayer:1.4.1")
+    implementation("androidx.media3:media3-ui:1.4.1")
+    implementation("androidx.media3:media3-common:1.4.1")
 
     testImplementation("junit:junit:4.13.2")
     androidTestImplementation("androidx.test.ext:junit:1.2.1")

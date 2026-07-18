@@ -47,7 +47,9 @@ data class Lesson(
     val titleUrdu: String = "",
     val contentText: String = "",       // lesson body, written by admin
     val contentTextUrdu: String = "",
-    val youtubeVideoId: String = "",    // empty if no video
+    val videoUrlEn: String = "",        // direct MP4 link, English narration — empty if no video
+    val videoUrlUr: String = "",        // direct MP4 link, Urdu narration — empty if no video
+    val videoThumbUrl: String = "",     // optional poster image shown before play (ImgBB)
     val pdfUrl: String = "",            // ImgBB doesn't host PDFs; use an external link (Drive, etc.)
     val order: Int = 0,
 )

@@ -5,6 +5,8 @@ import android.app.NotificationManager
 import android.app.Service
 import android.content.Intent
 import android.graphics.Bitmap
+import android.graphics.PixelFormat
+import android.hardware.display.DisplayManager
 import android.hardware.display.VirtualDisplay
 import android.media.Image
 import android.media.ImageReader
@@ -17,25 +19,27 @@ import android.os.IBinder
 import android.util.DisplayMetrics
 import androidx.core.app.NotificationCompat
 import com.mitv.trademaster.R
+import kotlinx.coroutines.flow.MutableStateFlow
 
 /**
- * Foreground service that owns the MediaProjection session used for the
- * "capture & analyze" feature and continuously updates `latestFrame` with
- * the current screen contents via ImageReader + VirtualDisplay.
+ * Foreground service that owns the ONE MediaProjection session for the whole
+ * floating-analyzer feature, and continuously refreshes [latestFrame].
  *
- * Must be started with the result Intent from
- * MediaProjectionManager.createScreenCaptureIntent(), obtained via
- * ScreenCaptureConsentActivity (a one-time system consent dialog — this
- * CANNOT be requested directly from a Service, only from an Activity,
- * which is why a dedicated transparent consent activity exists).
+ * Design goal: this service is the single source of truth for "do we have
+ * screen-capture permission right now". Nothing else should ever silently
+ * re-request permission — see [ScreenCaptureConsentActivity] for the only
+ * place that happens, and [OverlayBubbleService] for how it's consumed.
  */
 class ScreenCaptureService : Service() {
 
     companion object {
         @Volatile var latestFrame: Bitmap? = null
-        @Volatile var isActive: Boolean = false
+        /** True once a MediaProjection is live and frames are flowing. */
+        val isActive = MutableStateFlow(false)
         const val EXTRA_RESULT_CODE = "resultCode"
         const val EXTRA_DATA = "data"
+        private const val NOTIF_ID = 1002
+        private const val CHANNEL_ID = "mitv_capture_channel"
     }
 
     private var mediaProjection: MediaProjection? = null
@@ -43,6 +47,15 @@ class ScreenCaptureService : Service() {
     private var virtualDisplay: VirtualDisplay? = null
     private var handlerThread: HandlerThread? = null
     private var handler: Handler? = null
+
+    private val projectionCallback = object : MediaProjection.Callback() {
+        override fun onStop() {
+            // User revoked capture from the system "Stop casting" control, or the
+            // projection otherwise died. Shut everything down cleanly instead of
+            // leaving a dead service/bubble around.
+            stopSelf()
+        }
+    }
 
     override fun onCreate() {
         super.onCreate()
@@ -55,27 +68,12 @@ class ScreenCaptureService : Service() {
         val resultCode = intent?.getIntExtra(EXTRA_RESULT_CODE, -1) ?: -1
         val data = intent?.getParcelableExtra<Intent>(EXTRA_DATA)
 
-        if (resultCode != -1 && data != null) {
-            // Tear down any stale projection/display before starting a fresh one —
-            // handles the case where the service process was still alive from a
-            // previous grant but the projection itself had already been stopped
-            // by the system (this was leaving isActive=true with a dead
-            // projection, causing "Capture & Analyze" to silently do nothing).
-            releaseProjection()
+        if (resultCode != -1 && data != null && mediaProjection == null) {
             val manager = getSystemService(MediaProjectionManager::class.java)
             mediaProjection = manager.getMediaProjection(resultCode, data)
-            mediaProjection?.registerCallback(object : MediaProjection.Callback() {
-                override fun onStop() {
-                    // System revoked the projection (e.g. user dismissed the
-                    // system capture indicator, or a long-running grant expired).
-                    // Reset state so the next tap re-requests consent instead of
-                    // silently failing forever.
-                    isActive = false
-                    latestFrame = null
-                }
-            }, handler)
-            isActive = true
+            mediaProjection?.registerCallback(projectionCallback, handler)
             setUpVirtualDisplay()
+            isActive.value = true
         }
         return START_STICKY
     }
@@ -92,11 +90,11 @@ class ScreenCaptureService : Service() {
         val height = metrics.heightPixels
         val density = metrics.densityDpi
 
-        imageReader = ImageReader.newInstance(width, height, android.graphics.PixelFormat.RGBA_8888, 2)
+        imageReader = ImageReader.newInstance(width, height, PixelFormat.RGBA_8888, 2)
 
         virtualDisplay = mediaProjection?.createVirtualDisplay(
             "MitvScreenCapture", width, height, density,
-            android.hardware.display.DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
+            DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
             imageReader?.surface, null, handler
         )
 
@@ -108,7 +106,7 @@ class ScreenCaptureService : Service() {
                     latestFrame = imageToBitmap(image)
                 }
             } catch (e: Exception) {
-                // Dropped frame — non-fatal, next frame will update latestFrame
+                // Dropped frame — non-fatal, the next tick will refresh latestFrame.
             } finally {
                 image?.close()
             }
@@ -130,35 +128,31 @@ class ScreenCaptureService : Service() {
     }
 
     private fun startForegroundNotification() {
-        val channelId = "mitv_capture_channel"
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(channelId, "MI Trade Master Capture", NotificationManager.IMPORTANCE_MIN)
+            val channel = NotificationChannel(CHANNEL_ID, "MI Trade Master Capture", NotificationManager.IMPORTANCE_MIN)
             val manager = getSystemService(NotificationManager::class.java)
             manager.createNotificationChannel(channel)
         }
-        val notification = NotificationCompat.Builder(this, channelId)
+        val notification = NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("MI Trade Master")
             .setContentText("Screen capture ready for analysis")
             .setSmallIcon(R.mipmap.ic_launcher)
             .setPriority(NotificationCompat.PRIORITY_MIN)
             .build()
-        startForeground(1002, notification)
-    }
-
-    private fun releaseProjection() {
-        virtualDisplay?.release()
-        virtualDisplay = null
-        imageReader?.close()
-        imageReader = null
-        mediaProjection?.stop()
-        mediaProjection = null
+        startForeground(NOTIF_ID, notification)
     }
 
     override fun onDestroy() {
         super.onDestroy()
-        releaseProjection()
+        mediaProjection?.unregisterCallback(projectionCallback)
+        virtualDisplay?.release()
+        imageReader?.close()
+        mediaProjection?.stop()
         handlerThread?.quitSafely()
         latestFrame = null
-        isActive = false
+        isActive.value = false
+        // The capture session ending means the floating bubble has nothing to
+        // show/analyze anymore — stop it too instead of leaving a dead bubble.
+        stopService(Intent(this, OverlayBubbleService::class.java))
     }
 }

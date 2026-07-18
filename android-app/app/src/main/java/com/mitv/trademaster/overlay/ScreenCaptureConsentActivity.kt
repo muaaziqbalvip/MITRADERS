@@ -9,48 +9,41 @@ import androidx.activity.ComponentActivity
 import androidx.activity.result.contract.ActivityResultContracts
 
 /**
- * A transparent, no-UI activity whose only job is to trigger the system's
- * "Allow MI Trade Master to record or cast your screen?" consent dialog.
- * This MUST happen from an Activity — a Service can't request it directly,
- * which is why the floating-bubble capture button was failing to get
- * permission before this activity existed.
+ * The ONE place in the whole app that ever asks Android for screen-capture
+ * (MediaProjection) permission. Transparent, no UI of its own.
  *
- * Extends ComponentActivity (not plain Activity) because
- * registerForActivityResult is part of the AndroidX Activity Result API,
- * which is only available on ComponentActivity and its subclasses.
- *
- * Launched from OverlayBubbleService's "Capture & Analyze" button (via a
- * FLAG_ACTIVITY_NEW_TASK intent, since services can't start activities
- * without that flag) or from the Home screen the first time. Once the
- * user grants permission, the result is forwarded to ScreenCaptureService
- * and this activity immediately finishes.
+ * Flow:
+ *  1. Home screen launches this activity (only when capture isn't already
+ *     active — see HomeScreen's Start button).
+ *  2. This activity immediately shows the system's native
+ *     "Allow MI Trade Master to record or cast your screen?" dialog.
+ *  3. If granted: starts ScreenCaptureService (which owns the
+ *     MediaProjection for the rest of the session) and THEN starts
+ *     OverlayBubbleService — in that order, so the bubble never appears
+ *     without an active capture session behind it.
+ *  4. If denied: nothing starts, a toast explains why, done.
+ *  5. Either way, this activity finishes itself immediately after — it
+ *     never lingers and never gets re-triggered from inside the bubble.
  */
 class ScreenCaptureConsentActivity : ComponentActivity() {
 
     private val requestScreenCapture = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         if (result.resultCode == Activity.RESULT_OK && result.data != null) {
-            val serviceIntent = Intent(this, ScreenCaptureService::class.java).apply {
+            val captureIntent = Intent(this, ScreenCaptureService::class.java).apply {
                 putExtra(ScreenCaptureService.EXTRA_RESULT_CODE, result.resultCode)
                 putExtra(ScreenCaptureService.EXTRA_DATA, result.data)
             }
-            startForegroundService(serviceIntent)
-            Toast.makeText(this, "Screen capture enabled", Toast.LENGTH_SHORT).show()
+            startForegroundService(captureIntent)
+            startService(Intent(this, OverlayBubbleService::class.java))
+            Toast.makeText(this, "Floating analyzer started", Toast.LENGTH_SHORT).show()
         } else {
-            Toast.makeText(this, "Screen capture permission was not granted", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "Screen capture permission was not granted — floating analyzer needs it to read your chart", Toast.LENGTH_LONG).show()
         }
         finish()
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        // onCreate can technically run again if the system recreates this
-        // activity (e.g. config change) before the result callback fires —
-        // guard so we don't stack two system consent dialogs on top of each
-        // other, which was silently swallowing the tap in some cases.
-        if (savedInstanceState != null) {
-            finish()
-            return
-        }
         val projectionManager = getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
         requestScreenCapture.launch(projectionManager.createScreenCaptureIntent())
     }

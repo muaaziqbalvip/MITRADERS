@@ -2,594 +2,414 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<meta name="theme-color" content="#05080a">
-<title>MI Trade Master — Admin</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MI Trade Master — Admin Console</title>
 <style>
   :root{
     --bg: #05080a; --panel: #0b1114; --panel-2: #0f171b; --line: #1c2a2f;
-    --green: #34e39a; --green-dim: #1a7a56; --red: #ff5c6a; --amber:#ffc107;
+    --green: #34e39a; --green-dim: #1a7a56; --red: #ff5c6a;
     --silver: #cdd6d8; --silver-dim: #7c8b8f;
     --mono: 'JetBrains Mono', 'Courier New', monospace;
-    --safe-top: env(safe-area-inset-top, 0px);
-    --safe-bottom: env(safe-area-inset-bottom, 0px);
   }
-  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-  html, body{ overscroll-behavior-y: none; }
+  * { box-sizing: border-box; }
   body{
-    margin:0; background:
-      radial-gradient(ellipse 900px 500px at 15% -10%, rgba(52,227,154,0.08), transparent 60%),
-      radial-gradient(ellipse at top, #0d1518 0%, #05080a 60%);
+    margin:0; background: radial-gradient(ellipse at top, #0d1518 0%, #05080a 60%);
     color: var(--silver); font-family: var(--mono); min-height:100vh;
-    -webkit-font-smoothing: antialiased;
   }
   a { color: inherit; }
-  ::-webkit-scrollbar{ width:0; height:0; }
-  @keyframes fadeUp{ from{ opacity:0; transform: translateY(8px); } to{ opacity:1; transform:none; } }
-  @keyframes pop{ from{ opacity:0; transform: scale(.95); } to{ opacity:1; transform:none; } }
-  @keyframes tap{ 0%{ transform:scale(1); } 50%{ transform:scale(.94); } 100%{ transform:scale(1); } }
+  ::-webkit-scrollbar{ width:8px; height:8px; }
+  ::-webkit-scrollbar-thumb{ background: var(--line); border-radius:4px; }
 
-  /* ================= SPLASH SCREEN ================= */
-  .splash-screen{
-    position: fixed; inset:0; z-index: 200;
-    display:flex; flex-direction:column; align-items:center; justify-content:center;
-    background: radial-gradient(ellipse 900px 500px at 50% 20%, rgba(52,227,154,0.1), transparent 60%),
-      radial-gradient(ellipse at top, #0d1518 0%, #05080a 60%);
-    animation: splashOut .5s ease forwards; animation-delay: 1.9s;
-  }
-  @keyframes splashOut{ to{ opacity:0; visibility:hidden; pointer-events:none; } }
-  .splash-logo{
-    width:84px; height:84px; border-radius:24px; margin-bottom:18px;
-    background: linear-gradient(145deg, #1a2226, #0a0f11);
-    border: 1px solid var(--line); display:flex; align-items:center; justify-content:center;
-    font-weight:900; font-size:34px; color: var(--green);
-    box-shadow: 0 0 40px rgba(52,227,154,0.35) inset, 0 0 50px rgba(52,227,154,0.15);
-    animation: pop .5s ease;
-  }
-  .splash-title{ color:#fff; font-size:22px; margin:0; font-family: var(--mono); animation: fadeUp .5s ease .1s both; }
-  .splash-title span{ color: var(--green); }
-  .splash-tag{ color: var(--silver-dim); font-size:11px; letter-spacing:2px; text-transform:uppercase; margin: 6px 0 30px; animation: fadeUp .5s ease .2s both; }
-  .splash-candles{ display:flex; align-items:flex-end; gap:6px; height:60px; margin-bottom: 34px; }
-  .splash-candles .c{ width:6px; border-radius:3px; background: var(--green); opacity:0.85; animation: candleGrow 1.1s ease-in-out infinite; box-shadow: 0 0 10px rgba(52,227,154,0.4); }
-  .splash-candles .c.red{ background: var(--red); box-shadow: 0 0 10px rgba(255,92,106,0.4); }
-  .splash-candles .c:nth-child(1){ animation-delay: 0s; }
-  .splash-candles .c:nth-child(2){ animation-delay: .1s; }
-  .splash-candles .c:nth-child(3){ animation-delay: .2s; }
-  .splash-candles .c:nth-child(4){ animation-delay: .3s; }
-  .splash-candles .c:nth-child(5){ animation-delay: .4s; }
-  .splash-candles .c:nth-child(6){ animation-delay: .5s; }
-  .splash-candles .c:nth-child(7){ animation-delay: .6s; }
-  @keyframes candleGrow{ 0%,100%{ height:14px; } 50%{ height:56px; } }
-  .splash-loader{ width:140px; height:3px; background:#101a1d; border-radius:3px; overflow:hidden; }
-  .splash-loader-bar{ width:40%; height:100%; background: linear-gradient(90deg, var(--green-dim), var(--green)); border-radius:3px; animation: loaderSlide 1s ease-in-out infinite; }
-  @keyframes loaderSlide{ 0%{ transform: translateX(-100%); } 100%{ transform: translateX(350%); } }
-
-  /* ================= LOGIN SCREEN (full mobile screen) ================= */
-  .login-screen{
-    min-height:100vh; display:flex; flex-direction:column; align-items:center; justify-content:center;
-    padding: 24px; padding-top: calc(24px + var(--safe-top));
-  }
-  .login-card{
-    width:100%; max-width: 380px; text-align:center; padding: 32px 26px;
-    background: linear-gradient(180deg, var(--panel), var(--panel-2));
-    border: 1px solid var(--line); border-radius: 24px; animation: fadeUp .4s ease;
-  }
+  /* ---------- Login gate ---------- */
+  .login-gate{ max-width: 360px; margin: 12vh auto; text-align:center; padding: 20px; }
   .logo-m{
-    width:64px; height:64px; border-radius:18px; margin: 0 auto 18px;
+    width:56px; height:56px; border-radius:16px; margin: 0 auto 16px;
     background: linear-gradient(145deg, #1a2226, #0a0f11);
     border: 1px solid var(--line); display:flex; align-items:center; justify-content:center;
-    font-weight:900; font-size:26px; color: var(--green);
-    box-shadow: 0 0 26px rgba(52,227,154,0.3) inset, 0 0 34px rgba(52,227,154,0.1);
+    font-weight:900; font-size:22px; color: var(--green);
+    box-shadow: 0 0 18px rgba(52,227,154,0.25) inset;
   }
-  .login-card h1{ color:#fff; font-size:21px; margin: 0 0 4px; }
-  .login-card h1 span{ color: var(--green); }
-  .login-card p{ color:var(--silver-dim); font-size:12px; margin: 0 0 26px; }
+  .login-gate h1{ color:#fff; font-size:20px; margin: 0 0 4px; }
+  .login-gate p{ color:var(--silver-dim); font-size:12px; margin: 0 0 20px; }
 
-  .field{ text-align:left; margin-bottom: 14px; }
-  label{ display:block; font-size:11px; color:var(--silver-dim); margin: 0 0 6px; letter-spacing:0.5px; }
   input, textarea, select{
     width:100%; background:#070b0d; border:1px solid var(--line); color:#fff;
-    padding:14px 14px; border-radius:12px; font-family: var(--mono); font-size:15px;
+    padding:10px 12px; border-radius:8px; font-family: var(--mono); font-size:13px;
     outline:none; transition: border-color .15s;
-    -webkit-appearance: none; appearance: none;
   }
-  textarea{ font-size:13px; }
-  select{
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%237c8b8f' stroke-width='1.5' fill='none'/%3E%3C/svg%3E");
-    background-repeat: no-repeat; background-position: right 14px center;
-  }
-  input:focus, textarea:focus, select:focus{ border-color: var(--green-dim); box-shadow: 0 0 0 3px rgba(52,227,154,0.08); }
+  input:focus, textarea:focus, select:focus{ border-color: var(--green-dim); }
   input::placeholder, textarea::placeholder{ color:#3a4548; }
+  label{ display:block; font-size:11px; color:var(--silver-dim); margin: 12px 0 6px; letter-spacing:0.5px; }
 
   button{
     background: linear-gradient(135deg, var(--green), #1fae7a);
-    color:#04120b; border:none; padding:14px 18px; border-radius:14px;
-    font-family: var(--mono); font-weight:700; font-size:13px; letter-spacing:0.3px;
-    cursor:pointer; transition: transform .1s ease, filter .15s ease;
-    box-shadow: 0 4px 14px rgba(52,227,154,0.2);
+    color:#04120b; border:none; padding:11px 16px; border-radius:9px;
+    font-family: var(--mono); font-weight:700; font-size:12px; letter-spacing:0.3px;
+    cursor:pointer; transition: transform .1s, box-shadow .15s;
   }
-  button:active{ animation: tap .18s ease; }
-  button.secondary{ background: transparent; color: var(--silver); border: 1px solid var(--line); box-shadow:none; }
-  button.danger{ background: rgba(255,92,106,0.14); color: var(--red); box-shadow:none; }
-  button.small{ padding: 9px 12px; font-size: 11px; border-radius:10px; }
-  button.block{ width:100%; }
-  button:disabled{ opacity: 0.5; }
-  #loginError{ color:#ff5c6a; margin-top:14px; font-size:11px; min-height:14px; }
-  .login-hint{ margin-top:22px; font-size:10px; color:#3a4548; line-height:1.5; }
+  button:hover{ transform: translateY(-1px); }
+  button.secondary{ background: transparent; color: var(--silver); border: 1px solid var(--line); }
+  button.danger{ background: rgba(255,92,106,0.12); color: var(--red); box-shadow:none; }
+  button.small{ padding: 6px 10px; font-size: 10px; }
+  button:disabled{ opacity: 0.5; cursor: not-allowed; }
 
-  /* ================= APP SHELL ================= */
-  .app-shell{ display:none; min-height:100vh; padding-bottom: calc(74px + var(--safe-bottom)); }
-
-  .topbar{
-    display:flex; align-items:center; gap:12px; padding: 14px 18px;
-    padding-top: calc(14px + var(--safe-top));
-    position: sticky; top:0; z-index: 20;
-    background: rgba(5,8,10,0.88); backdrop-filter: blur(14px);
-    border-bottom: 1px solid var(--line);
+  /* ---------- App shell ---------- */
+  .app-shell{ display: none; }
+  header{
+    display:flex; align-items:center; gap:14px; padding: 16px 24px;
+    border-bottom: 1px solid var(--line); position: sticky; top:0;
+    background: rgba(5,8,10,0.9); backdrop-filter: blur(6px); z-index: 10;
   }
-  .topbar .logo-m{ width:34px; height:34px; font-size:14px; margin:0; border-radius:10px; }
-  .topbar .title{ flex:1; }
-  .topbar .title h1{ font-size:14px; margin:0; color:#fff; font-weight:700; }
-  .topbar .title small{ font-size:10px; color: var(--silver-dim); }
-  .avatar-btn{
-    width:32px; height:32px; border-radius:50%; background:#0a1114; border:1px solid var(--line);
-    display:flex; align-items:center; justify-content:center; font-size:13px; color: var(--silver-dim);
-    padding:0; box-shadow:none;
+  header .logo-m{ width:38px; height:38px; font-size:16px; margin:0; }
+  header h1{ font-size:15px; margin:0; color:#fff; font-weight:600; }
+  header .spacer{ flex:1; }
+  header .adminEmail{ font-size:11px; color: var(--silver-dim); }
+
+  nav.tabs{
+    display:flex; gap:4px; padding: 0 24px; border-bottom: 1px solid var(--line);
+    overflow-x:auto;
   }
+  nav.tabs button{
+    background:none; color: var(--silver-dim); border:none; box-shadow:none;
+    padding: 12px 14px; font-size: 11px; border-bottom: 2px solid transparent;
+    border-radius: 0; white-space:nowrap;
+  }
+  nav.tabs button.active{ color: var(--green); border-bottom-color: var(--green); }
 
-  main{ padding: 16px; max-width: 720px; margin: 0 auto; }
-  .page{ display:none; animation: fadeUp .3s ease; }
-  .page.active{ display:block; }
-
-  .section-title{ font-size:11px; text-transform: uppercase; letter-spacing: 1.5px; color: var(--silver-dim); margin: 22px 4px 10px; }
-  .section-title:first-child{ margin-top:4px; }
-  .section-title::before{ content:"// "; color: var(--green-dim); }
-
-  .card{
+  main{ padding: 24px; max-width: 1100px; margin: 0 auto; }
+  .panel{
     background: linear-gradient(180deg, var(--panel), var(--panel-2));
-    border: 1px solid var(--line); border-radius: 18px; padding: 16px; margin-bottom: 12px;
+    border: 1px solid var(--line); border-radius: 14px; padding: 20px; margin-bottom: 18px;
   }
-  .card h2{ font-size:11px; text-transform: uppercase; letter-spacing: 1.2px; color: var(--silver-dim); margin: 0 0 14px; }
-  .card h2::before{ content:"// "; color: var(--green-dim); }
+  .panel h2{ font-size:12px; text-transform: uppercase; letter-spacing: 1.5px; color: var(--silver-dim); margin: 0 0 16px; }
+  .panel h2::before{ content:"// "; color: var(--green-dim); }
 
-  /* Stat cards — horizontal scroll on mobile */
-  .stat-scroll{
-    display:flex; gap: 10px; overflow-x:auto; padding: 2px 2px 10px; margin: 0 -2px 6px;
-    scroll-snap-type: x mandatory;
-  }
-  .stat-card{
-    scroll-snap-align:start; flex: 0 0 130px;
-    background: linear-gradient(180deg, var(--panel), var(--panel-2));
-    border:1px solid var(--line); border-radius:16px; padding:14px; animation: pop .3s ease;
-  }
-  .stat-card .value{ font-size: 22px; font-weight: 800; color: var(--green); text-shadow: 0 0 20px rgba(52,227,154,0.25); }
-  .stat-card .label{ font-size: 10px; color: var(--silver-dim); margin-top:4px; line-height:1.3; }
+  .grid-2{ display:grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 700px){ .grid-2{ grid-template-columns: 1fr; } }
 
-  /* Mobile "row card" replaces table rows */
-  .row-card{
-    display:flex; align-items:center; gap:12px; padding: 12px;
-    background:#0a1114; border:1px solid var(--line); border-radius:14px; margin-bottom:8px;
-    transition: transform .1s ease;
-  }
-  .row-card:active{ transform: scale(.98); }
-  .row-card .thumb, .row-card .thumb-fallback{ flex-shrink:0; }
-  .row-card .info{ flex:1; min-width:0; }
-  .row-card .info .name{ color:#fff; font-size:13px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-  .row-card .info .meta{ color:var(--silver-dim); font-size:10.5px; margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-  .row-card .side{ flex-shrink:0; display:flex; flex-direction:column; align-items:flex-end; gap:6px; }
+  table{ width:100%; border-collapse: collapse; font-size:12px; }
+  th{ text-align:left; color:var(--silver-dim); font-weight:500; padding: 8px 10px; border-bottom:1px solid var(--line); text-transform:uppercase; font-size:10px; }
+  td{ padding:10px; border-bottom:1px solid #101a1d; vertical-align: top; }
+  .badge{ padding:3px 8px; border-radius:20px; font-size:10px; font-weight:700; display:inline-block; }
+  .badge.active{ background: rgba(52,227,154,0.12); color: var(--green); }
+  .badge.pending{ background: rgba(255,193,7,0.12); color: #ffc107; }
+  .badge.expired, .badge.rejected{ background: rgba(255,92,106,0.12); color: var(--red); }
+  .thumb{ width: 44px; height: 44px; border-radius: 8px; object-fit: cover; background: #070b0d; }
+  .row-actions{ display:flex; gap:6px; flex-wrap: wrap; }
+  .empty{ color: var(--silver-dim); font-size:12px; padding: 20px 0; text-align:center; }
+  .stat-row{ display:flex; gap: 14px; flex-wrap: wrap; margin-bottom: 18px; }
+  .stat-card{ flex:1; min-width: 140px; background: var(--panel); border:1px solid var(--line); border-radius:12px; padding:16px; }
+  .stat-card .value{ font-size: 24px; font-weight: 800; color: var(--green); }
+  .stat-card .label{ font-size: 11px; color: var(--silver-dim); margin-top:4px; }
 
-  .badge{ padding:4px 10px; border-radius:20px; font-size:9.5px; font-weight:700; display:inline-block; letter-spacing:0.4px; white-space:nowrap; }
-  .badge.active{ background: rgba(52,227,154,0.12); color: var(--green); box-shadow: 0 0 0 1px rgba(52,227,154,0.2) inset; }
-  .badge.pending{ background: rgba(255,193,7,0.12); color: var(--amber); box-shadow: 0 0 0 1px rgba(255,193,7,0.2) inset; }
-  .badge.expired, .badge.rejected{ background: rgba(255,92,106,0.12); color: var(--red); box-shadow: 0 0 0 1px rgba(255,92,106,0.2) inset; }
-
-  .thumb{ width: 46px; height: 46px; border-radius: 12px; object-fit: cover; background: #070b0d; border:1px solid var(--line); }
-  .thumb-fallback{
-    width:46px; height:46px; border-radius:12px; background:#070b0d; border:1px solid var(--line);
-    display:flex; align-items:center; justify-content:center; color: var(--silver-dim); font-size:18px;
-  }
-  .row-actions{ display:flex; gap:6px; flex-wrap: wrap; justify-content:flex-end; }
-  .empty{ color: var(--silver-dim); font-size:12px; padding: 34px 0; text-align:center; }
-  .empty-icon{ font-size:28px; margin-bottom:8px; opacity:.5; }
-
-  /* Segmented pill filter (mobile-native pattern) */
-  .segmented{ display:flex; gap:6px; overflow-x:auto; padding: 2px 2px 4px; margin-bottom:14px; }
-  .segmented button{
-    background:#0a1114; color:var(--silver-dim); border:1px solid var(--line); box-shadow:none;
-    padding:8px 14px; font-size:11px; border-radius:20px; white-space:nowrap; font-weight:600;
-  }
-  .segmented button.active{ background: rgba(52,227,154,0.12); color: var(--green); border-color: var(--green-dim); }
-
-  /* ================= BOTTOM NAV (app style) ================= */
-  nav.bottom-nav{
-    position: fixed; left:0; right:0; bottom:0; z-index: 30;
-    display:flex; justify-content: space-around; align-items:center;
-    background: rgba(8,12,14,0.92); backdrop-filter: blur(16px);
-    border-top: 1px solid var(--line);
-    padding: 8px 4px calc(8px + var(--safe-bottom));
-  }
-  nav.bottom-nav button{
-    background:none; box-shadow:none; color: var(--silver-dim); border:none;
-    display:flex; flex-direction:column; align-items:center; gap:3px;
-    padding: 6px 10px; border-radius:12px; flex:1; max-width:80px;
-    font-size:9.5px; font-weight:600; letter-spacing:0.2px;
-  }
-  nav.bottom-nav button .ic{ font-size:19px; line-height:1; }
-  nav.bottom-nav button.active{ color: var(--green); }
-  nav.bottom-nav button.active .ic{ filter: drop-shadow(0 0 8px rgba(52,227,154,0.5)); }
-
-  /* Floating action button */
-  .fab{
-    position: fixed; right:18px; bottom: calc(88px + var(--safe-bottom)); z-index: 25;
-    width:54px; height:54px; border-radius:50%; padding:0;
-    display:flex; align-items:center; justify-content:center; font-size:22px;
-    box-shadow: 0 6px 20px rgba(52,227,154,0.35);
-  }
-
-  /* ================= MODALS / SHEETS (bottom sheet style) ================= */
   .modal-backdrop{
-    display:none; position: fixed; inset:0; background: rgba(0,0,0,0.65); z-index: 50;
-    align-items:flex-end; justify-content:center; backdrop-filter: blur(3px);
+    display:none; position: fixed; inset:0; background: rgba(0,0,0,0.6); z-index: 50;
+    align-items:center; justify-content:center; padding: 20px;
   }
-  .modal-backdrop.center{ align-items:center; padding:20px; }
-  .sheet{
-    background: var(--panel-2); border: 1px solid var(--line); border-radius: 22px 22px 0 0;
-    padding: 10px 20px calc(24px + var(--safe-bottom)); max-width: 480px; width:100%;
-    max-height: 88vh; overflow-y:auto; animation: slideUp .25s ease;
+  .modal{
+    background: var(--panel-2); border: 1px solid var(--line); border-radius: 14px;
+    padding: 22px; max-width: 480px; width:100%; max-height: 85vh; overflow-y:auto;
   }
-  .modal-backdrop.center .sheet{ border-radius:20px; padding:22px; animation: pop .2s ease; max-height:85vh; }
-  @keyframes slideUp{ from{ transform: translateY(100%);} to{ transform: translateY(0);} }
-  .sheet-handle{ width:36px; height:4px; background: var(--line); border-radius:4px; margin: 6px auto 16px; }
-  .sheet h3{ margin:0 0 16px; color:#fff; font-size: 15px; }
-
+  .modal h3{ margin:0 0 14px; color:#fff; font-size: 14px; }
   .toast{
-    position: fixed; bottom: calc(90px + var(--safe-bottom)); left: 50%; transform: translateX(-50%);
+    position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
     background: var(--panel-2); border:1px solid var(--green-dim); color: var(--green);
-    padding: 12px 20px; border-radius: 30px; font-size:12px; z-index: 100; display:none;
-    box-shadow: 0 8px 24px rgba(0,0,0,0.4), 0 0 0 1px rgba(52,227,154,0.1);
-    max-width: 90vw; text-align:center;
+    padding: 12px 20px; border-radius: 10px; font-size:12px; z-index: 100; display:none;
   }
-  .qr-preview{ width: 140px; height:140px; object-fit:contain; background:#070b0d; border-radius:14px; border:1px solid var(--line); margin-top:10px; }
-  .img-zoom-backdrop{
-    display:none; position: fixed; inset:0; background: rgba(0,0,0,0.9); z-index: 60;
-    align-items:center; justify-content:center; padding: 24px; cursor: zoom-out;
-  }
-  .img-zoom-backdrop img{ max-width:92vw; max-height:88vh; border-radius:14px; border:1px solid var(--line); }
+  .qr-preview{ width: 140px; height:140px; object-fit:contain; background:#070b0d; border-radius:10px; border:1px solid var(--line); margin-top:10px; }
 
-  .lesson-item, .course-item{
-    display:flex; justify-content:space-between; align-items:center; padding:12px;
-    background:#0a1114; border:1px solid var(--line); border-radius:14px; margin-bottom:8px;
-    transition: border-color .15s ease;
-  }
-  .lesson-item:hover, .course-item:hover{ border-color: var(--green-dim); }
-  .lesson-item .t{ color:#fff; font-size:12.5px; }
-  .lesson-item .lvl{ color:var(--silver-dim); font-size:10px; margin-top:2px; }
+  /* ---------- Mobile app-style layout ---------- */
+  @media (max-width: 760px) {
+    header{ padding: 14px 16px; position: sticky; }
+    header h1{ font-size: 13px; }
+    header .adminEmail{ display: none; }
 
-  #studentModalBody p{
-    display:flex; justify-content:space-between; gap:12px; margin: 0; padding: 10px 2px;
-    border-bottom: 1px solid #101a1d; font-size:12.5px;
-  }
-  #studentModalBody p:last-child{ border-bottom:none; }
-  #studentModalBody p b{ color: var(--silver-dim); font-weight:600; flex-shrink:0; }
-  #studentModalBody img.thumb{ display:block; margin: 4px auto 14px; }
-  #studentModalBody p:has(img){ display:block; text-align:center; border-bottom:none; }
-  .sheet-hidden{ display:none !important; }
-  .sheet-visible{ display:block !important; }
+    nav.tabs{
+      display: none; /* replaced by bottom tab bar on mobile */
+    }
 
-  .card{ position: relative; overflow: hidden; }
-  .card::before{
-    content:""; position:absolute; top:0; left:0; right:0; height:1px;
-    background: linear-gradient(90deg, transparent, rgba(52,227,154,0.4), transparent);
+    .mobile-bottom-nav{
+      display: flex !important;
+      position: fixed; bottom: 0; left: 0; right: 0;
+      background: rgba(11,17,20,0.97); backdrop-filter: blur(10px);
+      border-top: 1px solid var(--line);
+      justify-content: space-around; align-items: center;
+      padding: 8px 4px calc(8px + env(safe-area-inset-bottom));
+      z-index: 20;
+    }
+    .mobile-bottom-nav button{
+      background: none; box-shadow: none; border: none; color: var(--silver-dim);
+      display: flex; flex-direction: column; align-items: center; gap: 3px;
+      font-size: 9px; padding: 6px 8px; border-radius: 10px; flex: 1;
+    }
+    .mobile-bottom-nav button .icon{ font-size: 18px; }
+    .mobile-bottom-nav button.active{ color: var(--green); }
+
+    main{ padding: 14px 14px 90px; }
+    .stat-row{ gap: 10px; }
+    .stat-card{ min-width: calc(50% - 5px); flex: none; padding: 14px; }
+    .stat-card .value{ font-size: 20px; }
+
+    .panel{ padding: 16px; border-radius: 16px; }
+
+    .grid-2{ grid-template-columns: 1fr; gap: 12px; }
+
+    /* Turn tables into stacked cards on mobile */
+    table, thead{ display: none; }
+    tbody.mobile-cards{ display: block; }
+    tbody.mobile-cards tr{
+      display: block; background: #070b0d; border-radius: 12px;
+      padding: 12px; margin-bottom: 10px; border: 1px solid var(--line);
+    }
+    tbody.mobile-cards td{
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 6px 0; border: none; font-size: 12px;
+    }
+    tbody.mobile-cards td::before{
+      content: attr(data-label); color: var(--silver-dim); font-size: 10px;
+      text-transform: uppercase; margin-right: 10px;
+    }
+    tbody.mobile-cards td.row-actions{ justify-content: flex-end; gap: 6px; }
+    tbody.mobile-cards td.row-actions::before{ content: none; }
+
+    .modal{ border-radius: 18px 18px 0 0; position: fixed; bottom: 0; left: 0; right: 0; max-width: 100%; margin: 0; }
+    .modal-backdrop{ align-items: flex-end; padding: 0; }
   }
+
+  .mobile-bottom-nav{ display: none; }
 </style>
 </head>
 <body>
 
-<!-- ============ SPLASH SCREEN ============ -->
-<div class="splash-screen" id="splashScreen">
-  <div class="splash-logo">M</div>
-  <h1 class="splash-title">MI Trade <span>Master</span></h1>
-  <p class="splash-tag">Admin Console</p>
-  <div class="splash-candles" id="splashCandles"></div>
-  <div class="splash-loader"><div class="splash-loader-bar"></div></div>
-</div>
-
-<!-- ============ LOGIN SCREEN ============ -->
-<div class="login-screen" id="loginGate">
-  <div class="login-card">
-    <div class="logo-m">M</div>
-    <h1>MI Trade <span>Master</span></h1>
-    <p>Admin Console — sign in to continue</p>
-    <div class="field">
-      <label>Admin Email</label>
-      <input type="email" id="adminEmail" placeholder="admin@example.com" inputmode="email" />
-    </div>
-    <div class="field">
-      <label>Password</label>
-      <input type="password" id="adminPassword" placeholder="••••••••" />
-    </div>
-    <button class="block" onclick="adminSignIn()">Sign In</button>
-    <p id="loginError"></p>
-    <p class="login-hint">
-      This account must exist in Firebase Authentication (Email/Password) and
-      be listed as an admin in Firestore.
-    </p>
-  </div>
+<!-- ============ LOGIN GATE ============ -->
+<div class="login-gate" id="loginGate">
+  <div class="logo-m">M</div>
+  <h1>MI Trade Master</h1>
+  <p>Admin Console — sign in with your admin Firebase account</p>
+  <label>Admin Email</label>
+  <input type="email" id="adminEmail" placeholder="admin@example.com" />
+  <label>Password</label>
+  <input type="password" id="adminPassword" placeholder="••••••••" />
+  <div style="margin-top:18px;"><button style="width:100%" onclick="adminSignIn()">Sign In</button></div>
+  <p id="loginError" style="color:#ff5c6a; margin-top:12px;"></p>
+  <p style="margin-top:20px; font-size:10px; color:#3a4548;">
+    This account must exist in Firebase Authentication (Email/Password) and
+    be listed as an admin in Firestore — see the README for setup.
+  </p>
 </div>
 
 <!-- ============ APP SHELL ============ -->
 <div class="app-shell" id="appShell">
-
-  <div class="topbar">
+  <header>
     <div class="logo-m">M</div>
-    <div class="title">
-      <h1 id="pageTitle">Dashboard</h1>
-      <small id="adminEmailLabel"></small>
-    </div>
-    <button class="avatar-btn" onclick="goToPage('config')" style="margin-right:6px;">⚙️</button>
-    <button class="avatar-btn" onclick="adminSignOut()">⎋</button>
-  </div>
+    <h1>MI Trade Master — Admin</h1>
+    <div class="spacer"></div>
+    <span class="adminEmail" id="adminEmailLabel"></span>
+    <button class="secondary small" onclick="adminSignOut()" style="margin-left:12px;">Sign Out</button>
+  </header>
+
+  <nav class="tabs" id="tabs">
+    <button data-tab="dashboard" class="active">Dashboard</button>
+    <button data-tab="students">Students</button>
+    <button data-tab="payments">Payments</button>
+    <button data-tab="courses">Courses & Lessons</button>
+    <button data-tab="announcements">Announcements</button>
+    <button data-tab="update">App Update</button>
+    <button data-tab="config">Payment QR & Config</button>
+  </nav>
+
+  <nav class="mobile-bottom-nav" id="mobileTabs">
+    <button data-tab="dashboard" class="active"><span class="icon">📊</span>Dashboard</button>
+    <button data-tab="students"><span class="icon">🎓</span>Students</button>
+    <button data-tab="payments"><span class="icon">💳</span>Payments</button>
+    <button data-tab="courses"><span class="icon">📚</span>Courses</button>
+    <button data-tab="announcements"><span class="icon">📢</span>News</button>
+    <button data-tab="update"><span class="icon">⬆️</span>Update</button>
+    <button data-tab="config"><span class="icon">⚙️</span>Config</button>
+  </nav>
 
   <main>
-    <!-- ============ DASHBOARD ============ -->
-    <section class="page active" id="page-dashboard">
-      <div class="stat-scroll">
+    <!-- Dashboard -->
+    <section id="tab-dashboard">
+      <div class="stat-row">
         <div class="stat-card"><div class="value" id="statTotalStudents">—</div><div class="label">Total Students</div></div>
-        <div class="stat-card"><div class="value" id="statActiveStudents">—</div><div class="label">Active Subs</div></div>
-        <div class="stat-card"><div class="value" id="statPendingPayments">—</div><div class="label">Pending Pay</div></div>
-        <div class="stat-card"><div class="value" id="statRevenue">—</div><div class="label">Revenue (PKR)</div></div>
+        <div class="stat-card"><div class="value" id="statActiveStudents">—</div><div class="label">Active Subscriptions</div></div>
+        <div class="stat-card"><div class="value" id="statPendingPayments">—</div><div class="label">Pending Payments</div></div>
+        <div class="stat-card"><div class="value" id="statRevenue">—</div><div class="label">Est. Monthly Revenue (PKR)</div></div>
       </div>
-
-      <div class="section-title">Recently Active</div>
-      <div id="recentActivityBody"><div class="empty"><div class="empty-icon">⏳</div>Loading…</div></div>
+      <div class="panel">
+        <h2>Recently Active Students</h2>
+        <table>
+          <thead><tr><th>Student</th><th>Last Active</th><th>Lessons</th><th>Analyses</th><th>Status</th></tr></thead>
+          <tbody id="recentActivityBody" class="mobile-cards"><tr><td colspan="5" class="empty">Loading…</td></tr></tbody>
+        </table>
+      </div>
     </section>
 
-    <!-- ============ CHART DEMO ============ -->
-    <section class="page" id="page-chart">
-      <div class="segmented" id="chartFilter">
-        <button data-tf="1m" class="active">1m</button>
-        <button data-tf="5m">5m</button>
-        <button data-tf="15m">15m</button>
-        <button data-tf="1h">1h</button>
-        <button data-tf="1d">1D</button>
+    <!-- Students -->
+    <section id="tab-students" style="display:none;">
+      <div class="panel">
+        <h2>All Students</h2>
+        <table>
+          <thead><tr><th>Photo</th><th>Name</th><th>Father Name</th><th>ID Card #</th><th>Status</th><th>Actions</th></tr></thead>
+          <tbody id="studentsBody" class="mobile-cards"><tr><td colspan="6" class="empty">Loading…</td></tr></tbody>
+        </table>
       </div>
-      <div class="card" style="padding:12px;">
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; padding:0 4px;">
+    </section>
+
+    <!-- Payments -->
+    <section id="tab-payments" style="display:none;">
+      <div class="panel">
+        <h2>Payment Submissions</h2>
+        <table>
+          <thead><tr><th>Screenshot</th><th>Student</th><th>Submitted</th><th>Status</th><th>Actions</th></tr></thead>
+          <tbody id="paymentsBody"><tr><td colspan="5" class="empty">Loading…</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Courses & Lessons -->
+    <section id="tab-courses" style="display:none;">
+      <div class="grid-2">
+        <div class="panel">
+          <h2>Add Course</h2>
+          <label>Title (English)</label><input id="courseTitle" placeholder="Candlestick Basics" />
+          <label>Title (Urdu)</label><input id="courseTitleUr" placeholder="کینڈل سٹک بنیادی باتیں" />
+          <label>Description</label><input id="courseDesc" placeholder="Learn to read candles, wicks, and bodies" />
+          <label>Level</label>
+          <select id="courseLevel"><option value="beginner">Beginner</option><option value="intermediate">Intermediate</option><option value="advanced">Advanced</option></select>
+          <label>Order (number, lower shows first)</label><input id="courseOrder" type="number" value="1" />
+          <label>Icon</label>
+          <select id="courseIcon">
+            <option value="School">School</option><option value="CandlestickChart">CandlestickChart</option>
+            <option value="Timeline">Timeline</option><option value="ShowChart">ShowChart</option>
+            <option value="AutoGraph">AutoGraph</option><option value="Security">Security</option>
+            <option value="Psychology">Psychology</option><option value="Rule">Rule</option>
+          </select>
+          <div style="margin-top:16px;"><button onclick="createCourse()">Add Course</button></div>
+        </div>
+        <div class="panel">
+          <h2>Courses</h2>
+          <div id="coursesList" style="display:flex; flex-direction:column; gap:8px;"></div>
+        </div>
+      </div>
+
+      <div class="panel" id="lessonsPanel" style="display:none;">
+        <h2>Lessons for: <span id="selectedCourseTitle"></span></h2>
+        <div class="grid-2">
           <div>
-            <div style="color:#fff; font-size:15px; font-weight:700;">XAU/USD <span id="chartPricePulse" style="color:var(--green); font-size:11px;">●</span></div>
-            <div id="chartPrice" style="font-size:20px; font-weight:800; color:var(--green);">—</div>
+            <label>Title (English)</label><input id="lessonTitle" placeholder="What is a candlestick?" />
+            <label>Title (Urdu)</label><input id="lessonTitleUr" placeholder="کینڈل سٹک کیا ہے؟" />
+            <label>Content (English)</label><textarea id="lessonContent" rows="4" placeholder="Lesson text..."></textarea>
+            <label>Content (Urdu)</label><textarea id="lessonContentUr" rows="4" placeholder="سبق کا متن..."></textarea>
           </div>
-          <div style="text-align:right;">
-            <div id="chartChange" style="font-size:12px; font-weight:700;">—</div>
-            <div style="font-size:10px; color:var(--silver-dim);">Demo Data</div>
+          <div>
+            <label>Video (MP4 link) — English narration, optional</label><input id="lessonVideoEn" placeholder="https://yourcdn.com/lesson1-en.mp4" />
+            <label>Video (MP4 link) — Urdu narration, optional</label><input id="lessonVideoUr" placeholder="https://yourcdn.com/lesson1-ur.mp4" />
+            <label>Video Thumbnail (optional — upload an image or paste ImgBB link)</label><input id="lessonVideoThumb" placeholder="https://i.ibb.co/..." />
+            <label>PDF Book Link (optional — Google Drive share link, etc.)</label><input id="lessonPdf" placeholder="https://drive.google.com/..." />
+            <label>Order</label><input id="lessonOrder" type="number" value="1" />
+            <div style="margin-top:16px;"><button onclick="createLesson()">Add Lesson</button></div>
           </div>
         </div>
-        <canvas id="candleCanvas" style="width:100%; height:280px; display:block; border-radius:12px; background:#070b0d;"></canvas>
-      </div>
-
-      <div class="section-title">Live Ticker (Demo)</div>
-      <div class="card">
-        <div id="tickerList"></div>
+        <div id="lessonsList" style="margin-top:16px; display:flex; flex-direction:column; gap:8px;"></div>
       </div>
     </section>
 
-    <!-- ============ STUDENTS ============ -->
-    <section class="page" id="page-students">
-      <div class="segmented" id="studentFilter">
-        <button data-f="all" class="active">All</button>
-        <button data-f="active">Active</button>
-        <button data-f="pending">Pending</button>
-        <button data-f="expired">Expired</button>
-      </div>
-      <div id="studentsBody"><div class="empty"><div class="empty-icon">⏳</div>Loading…</div></div>
-    </section>
-
-    <!-- ============ PAYMENTS ============ -->
-    <section class="page" id="page-payments">
-      <div class="segmented" id="paymentFilter">
-        <button data-f="all" class="active">All</button>
-        <button data-f="pending">Pending</button>
-        <button data-f="approved">Approved</button>
-        <button data-f="rejected">Rejected</button>
-      </div>
-      <div id="paymentsBody"><div class="empty"><div class="empty-icon">⏳</div>Loading…</div></div>
-    </section>
-
-    <!-- ============ COURSES ============ -->
-    <section class="page" id="page-courses">
-      <div class="section-title">Your Courses</div>
-      <div id="coursesList"></div>
-
-      <div class="card" id="lessonsPanel" style="display:none; margin-top:16px;">
-        <h2>Lessons — <span id="selectedCourseTitle"></span></h2>
-        <div id="lessonsList" style="margin-bottom:12px;"></div>
-        <button class="block secondary" onclick="openLessonSheet()">+ Add Lesson</button>
-      </div>
-    </section>
-
-    <!-- ============ SETTINGS / CONFIG ============ -->
-    <section class="page" id="page-config">
-      <div class="section-title">Payment QR Code</div>
-      <div class="card">
-        <p style="font-size:11.5px; color:var(--silver-dim); margin:0 0 12px;">Students see this on the payment screen.</p>
-        <input type="file" id="qrFileInput" accept="image/*" />
-        <div><img id="qrPreview" class="qr-preview" style="display:none;" onclick="openImgZoom(this.src)" /></div>
-        <button class="block" style="margin-top:14px;" onclick="uploadQrCode()">Upload & Save QR</button>
-      </div>
-
-      <div class="section-title">App Settings</div>
-      <div class="card">
-        <div class="field">
-          <label>Monthly Subscription Price (PKR)</label>
-          <input id="configPrice" type="number" inputmode="numeric" value="500" />
+    <!-- Announcements -->
+    <section id="tab-announcements" style="display:none;">
+      <div class="grid-2">
+        <div class="panel">
+          <h2>Post Announcement</h2>
+          <label>Title (English)</label><input id="annTitle" placeholder="New course added!" />
+          <label>Title (Urdu)</label><input id="annTitleUr" placeholder="نیا کورس شامل کر دیا گیا!" />
+          <label>Message (English)</label><textarea id="annMessage" rows="3" placeholder="Check out the new Risk Management course."></textarea>
+          <label>Message (Urdu)</label><textarea id="annMessageUr" rows="3" placeholder="نیا رسک مینجمنٹ کورس دیکھیں۔"></textarea>
+          <label>Icon</label>
+          <select id="annIcon">
+            <option value="Campaign">Campaign</option>
+            <option value="NewReleases">New Release</option>
+            <option value="Star">Star</option>
+            <option value="Warning">Warning</option>
+          </select>
+          <div style="margin-top:16px; display:flex; gap:10px;">
+            <button onclick="createAnnouncement()">Post Announcement</button>
+            <button class="secondary" onclick="sendAnnouncementPush()">Also Send Push Notification</button>
+          </div>
         </div>
-        <div class="field">
-          <label>WhatsApp Number</label>
-          <input id="configWhatsapp" placeholder="923062015326" inputmode="tel" />
+        <div class="panel">
+          <h2>Active Announcements</h2>
+          <div id="announcementsList" style="display:flex; flex-direction:column; gap:8px;"></div>
         </div>
-        <div class="field">
-          <label>Groq API Key (support chat)</label>
-          <input id="configGroqKey" placeholder="gsk_..." type="password" />
-        </div>
-        <button class="block" onclick="saveConfig()">Save Settings</button>
       </div>
+    </section>
 
-      <div class="section-title">Announcements</div>
-      <div class="card">
-        <div id="announcementsList" style="margin-bottom:12px;"></div>
-        <button class="block secondary" onclick="openAnnouncementSheet()">+ New Announcement</button>
-      </div>
-
-      <div class="section-title">App Update</div>
-      <div class="card">
-        <p style="font-size:11px; color:var(--silver-dim); margin:0 0 14px;">
-          When a new APK is published, fill this in so installed apps detect and prompt for the update.
+    <!-- App Update -->
+    <section id="tab-update" style="display:none;">
+      <div class="panel">
+        <h2>App Version Control</h2>
+        <p style="font-size:11px; color:var(--silver-dim);">
+          When you publish a new APK (via GitHub Actions releases), fill this in so
+          installed apps detect and prompt for the update. The version code must be
+          strictly higher than the current app's versionCode to trigger anything.
         </p>
-        <div class="field">
-          <label>Latest Version Code (integer, must increase)</label>
-          <input id="updateVersionCode" type="number" inputmode="numeric" placeholder="5" />
-        </div>
-        <div class="field">
-          <label>Latest Version Name</label>
-          <input id="updateVersionName" placeholder="4.1.0" />
-        </div>
-        <div class="field">
-          <label>APK Download URL</label>
-          <input id="updateApkUrl" placeholder="https://github.com/you/repo/releases/download/v4.1.0/app.apk" />
-        </div>
-        <div class="field">
-          <label>Release Notes</label>
-          <textarea id="updateNotes" rows="3" placeholder="Bug fixes and new features."></textarea>
-        </div>
-        <label style="display:flex; align-items:center; gap:8px; font-size:12px; color:var(--silver); margin-bottom:14px;">
+        <label>Latest Version Code (integer, must increase every release)</label>
+        <input id="updateVersionCode" type="number" placeholder="5" />
+        <label>Latest Version Name (shown to users)</label>
+        <input id="updateVersionName" placeholder="4.1.0" />
+        <label>APK Download URL (from your GitHub Release)</label>
+        <input id="updateApkUrl" placeholder="https://github.com/you/repo/releases/download/v4.1.0/MI-Trade-Master.apk" />
+        <label>Release Notes</label>
+        <textarea id="updateNotes" rows="3" placeholder="Bug fixes and new Practice mode features."></textarea>
+        <label style="display:flex; align-items:center; gap:8px; margin-top:14px;">
           <input type="checkbox" id="updateForce" style="width:auto;" />
           Force update (blocks app usage until updated)
         </label>
-        <button class="block" onclick="saveUpdateConfig()">Publish Update Info</button>
+        <div style="margin-top:16px;"><button onclick="saveUpdateConfig()">Publish Update Info</button></div>
+        <p id="updateSavedNote" style="color:var(--green); font-size:11px; margin-top:10px; display:none;">Saved — installed apps will detect this on next launch.</p>
+      </div>
+    </section>
+
+    <!-- Config -->
+    <section id="tab-config" style="display:none;">
+      <div class="grid-2">
+        <div class="panel">
+          <h2>Payment QR Code</h2>
+          <p style="font-size:11px; color:var(--silver-dim);">Upload your payment QR code image (via ImgBB) — students will see this on the payment screen.</p>
+          <label>QR Code Image</label>
+          <input type="file" id="qrFileInput" accept="image/*" />
+          <img id="qrPreview" class="qr-preview" style="display:none;" />
+          <div style="margin-top:12px;"><button onclick="uploadQrCode()">Upload & Save QR</button></div>
+        </div>
+        <div class="panel">
+          <h2>App Settings</h2>
+          <label>Monthly Subscription Price (PKR)</label>
+          <input id="configPrice" type="number" value="500" />
+          <label>WhatsApp Number (no + or spaces, e.g. 923062015326)</label>
+          <input id="configWhatsapp" placeholder="923062015326" />
+          <label>Groq API Key (for support chat assistant)</label>
+          <input id="configGroqKey" placeholder="gsk_..." type="password" />
+          <p style="font-size:10px; color:var(--silver-dim); margin-top:4px;">
+            Get a free key at console.groq.com. Rotate it here anytime — no app update needed.
+          </p>
+          <div style="margin-top:16px;"><button onclick="saveConfig()">Save Settings</button></div>
+        </div>
       </div>
     </section>
   </main>
-
-  <!-- FAB — context-aware add button -->
-  <button class="fab" id="fabBtn" style="display:none;">+</button>
-
-  <!-- ============ BOTTOM NAV ============ -->
-  <nav class="bottom-nav" id="bottomNav">
-    <button data-page="dashboard" class="active"><span class="ic">🏠</span>Home</button>
-    <button data-page="students"><span class="ic">👥</span>Students</button>
-    <button data-page="chart"><span class="ic">📈</span>Chart</button>
-    <button data-page="payments"><span class="ic">💳</span>Payments</button>
-    <button data-page="courses"><span class="ic">📚</span>Courses</button>
-  </nav>
 </div>
 
 <div class="toast" id="toast"></div>
 
-<!-- Student detail sheet -->
+<!-- Student detail modal -->
 <div class="modal-backdrop" id="studentModalBackdrop">
-  <div class="sheet">
-    <div class="sheet-handle"></div>
-    <h3 id="studentSheetTitle">Student Details</h3>
+  <div class="modal">
+    <h3>Student Details</h3>
     <div id="studentModalBody"></div>
-    <div id="studentEditFields" class="sheet-hidden">
-      <div class="field"><label>Name</label><input id="editStudentName" /></div>
-      <div class="field"><label>Father's Name</label><input id="editFatherName" /></div>
-      <div class="field"><label>ID Card Number</label><input id="editIdCardNumber" /></div>
-      <div class="field"><label>Father's Address</label><input id="editFatherAddress" /></div>
-      <div class="field"><label>Qualification</label><input id="editQualification" /></div>
-      <div class="field"><label>Phone</label><input id="editPhone" inputmode="tel" /></div>
-      <div class="field">
-        <label>Subscription Status</label>
-        <select id="editSubStatus">
-          <option value="pending">Pending</option>
-          <option value="active">Active</option>
-          <option value="expired">Expired</option>
-        </select>
-      </div>
-    </div>
-    <div style="display:flex; gap:8px; margin-top:16px;">
-      <button class="secondary" style="flex:1;" onclick="closeStudentModal()">Close</button>
-      <button style="flex:1;" id="studentEditToggleBtn" onclick="toggleStudentEdit()">Edit Profile</button>
+    <div style="margin-top:16px; display:flex; gap:8px;">
+      <button class="secondary" onclick="closeStudentModal()">Close</button>
     </div>
   </div>
-</div>
-
-<!-- Add course sheet -->
-<div class="modal-backdrop" id="courseModalBackdrop">
-  <div class="sheet">
-    <div class="sheet-handle"></div>
-    <h3>Add Course</h3>
-    <div class="field"><label>Title (English)</label><input id="courseTitle" placeholder="Candlestick Basics" /></div>
-    <div class="field"><label>Title (Urdu)</label><input id="courseTitleUr" placeholder="کینڈل سٹک بنیادی باتیں" /></div>
-    <div class="field"><label>Description</label><input id="courseDesc" placeholder="Learn to read candles, wicks, and bodies" /></div>
-    <div class="field">
-      <label>Level</label>
-      <select id="courseLevel"><option value="beginner">Beginner</option><option value="intermediate">Intermediate</option><option value="advanced">Advanced</option></select>
-    </div>
-    <div class="field"><label>Order (lower shows first)</label><input id="courseOrder" type="number" inputmode="numeric" value="1" /></div>
-    <div class="field">
-      <label>Icon</label>
-      <select id="courseIcon">
-        <option value="School">School</option><option value="CandlestickChart">CandlestickChart</option>
-        <option value="Timeline">Timeline</option><option value="ShowChart">ShowChart</option>
-        <option value="AutoGraph">AutoGraph</option><option value="Security">Security</option>
-        <option value="Psychology">Psychology</option><option value="Rule">Rule</option>
-      </select>
-    </div>
-    <div style="display:flex; gap:8px; margin-top:8px;">
-      <button class="secondary" style="flex:1;" onclick="closeCourseSheet()">Cancel</button>
-      <button style="flex:1;" onclick="createCourse()">Add Course</button>
-    </div>
-  </div>
-</div>
-
-<!-- Add lesson sheet -->
-<div class="modal-backdrop" id="lessonModalBackdrop">
-  <div class="sheet">
-    <div class="sheet-handle"></div>
-    <h3 id="lessonSheetTitle">Add Lesson</h3>
-    <div class="field"><label>Title (English)</label><input id="lessonTitle" placeholder="What is a candlestick?" /></div>
-    <div class="field"><label>Title (Urdu)</label><input id="lessonTitleUr" placeholder="کینڈل سٹک کیا ہے؟" /></div>
-    <div class="field"><label>Content (English)</label><textarea id="lessonContent" rows="3" placeholder="Lesson text..."></textarea></div>
-    <div class="field"><label>Content (Urdu)</label><textarea id="lessonContentUr" rows="3" placeholder="سبق کا متن..."></textarea></div>
-    <div class="field"><label>YouTube Video ID (optional)</label><input id="lessonYoutube" placeholder="e.g. dQw4w9WgXcQ" /></div>
-    <div class="field"><label>PDF Book Link (optional)</label><input id="lessonPdf" placeholder="https://drive.google.com/..." /></div>
-    <div class="field"><label>Order</label><input id="lessonOrder" type="number" inputmode="numeric" value="1" /></div>
-    <div style="display:flex; gap:8px; margin-top:8px;">
-      <button class="secondary" style="flex:1;" onclick="closeLessonSheet()">Cancel</button>
-      <button style="flex:1;" id="lessonSaveBtn" onclick="saveLesson()">Add Lesson</button>
-    </div>
-  </div>
-</div>
-
-<!-- Add/Edit announcement sheet -->
-<div class="modal-backdrop" id="announcementModalBackdrop">
-  <div class="sheet">
-    <div class="sheet-handle"></div>
-    <h3 id="announcementSheetTitle">New Announcement</h3>
-    <div class="field"><label>Title (English)</label><input id="annTitle" placeholder="New course added!" /></div>
-    <div class="field"><label>Title (Urdu)</label><input id="annTitleUr" placeholder="نیا کورس شامل کر دیا گیا!" /></div>
-    <div class="field"><label>Message (English)</label><textarea id="annMessage" rows="3" placeholder="Check out the new Risk Management course."></textarea></div>
-    <div class="field"><label>Message (Urdu)</label><textarea id="annMessageUr" rows="3" placeholder="نیا رسک مینجمنٹ کورس دیکھیں۔"></textarea></div>
-    <div class="field">
-      <label>Icon</label>
-      <select id="annIcon">
-        <option value="Campaign">Campaign</option>
-        <option value="NewReleases">New Release</option>
-        <option value="Star">Star</option>
-        <option value="Warning">Warning</option>
-      </select>
-    </div>
-    <div style="display:flex; gap:8px; margin-top:8px;">
-      <button class="secondary" style="flex:1;" onclick="closeAnnouncementSheet()">Cancel</button>
-      <button style="flex:1;" id="announcementSaveBtn" onclick="saveAnnouncement()">Post Announcement</button>
-    </div>
-  </div>
-</div>
-
-<!-- Image zoom viewer -->
-<div class="img-zoom-backdrop" id="imgZoomBackdrop" onclick="closeImgZoom()">
-  <img id="imgZoomTarget" src="" />
 </div>
 
 <!-- ============ FIREBASE ============ -->
@@ -598,7 +418,10 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script>
 // ======================================================================
-// FIREBASE CONFIG
+// PASTE YOUR FIREBASE WEB CONFIG HERE (Firebase Console → Project
+// Settings → General → Your apps → Web app → Config). This is safe to
+// expose client-side; it's not a secret, access is controlled by
+// Firestore/Auth security rules.
 // ======================================================================
 const firebaseConfig = {
   apiKey: "AIzaSyCldWSASWc8cYKugKsbUR6AyEeUcpopeRE",
@@ -607,7 +430,7 @@ const firebaseConfig = {
   storageBucket: "mitrademaster.firebasestorage.app",
   messagingSenderId: "206224301348",
   appId: "1:206224301348:web:305c5c73e0cb5fa117e7b1",
-  measurementId: "G-LHSQXCH6BK"
+  measurementId: "G-LHSQXCH6BK",
 };
 
 firebase.initializeApp(firebaseConfig);
@@ -615,19 +438,6 @@ const auth = firebase.auth();
 const db = firebase.firestore();
 
 const IMGBB_API_KEY = "6bdb23b28e7581721b28e46ce313308b";
-
-// ---------------------------------------------------------------------
-// Splash screen
-// ---------------------------------------------------------------------
-(function initSplash() {
-  const container = document.getElementById('splashCandles');
-  const colors = ['', 'red', '', '', 'red', '', 'red'];
-  container.innerHTML = colors.map(c => `<div class="c ${c}"></div>`).join('');
-  setTimeout(() => {
-    const splash = document.getElementById('splashScreen');
-    if (splash) splash.remove();
-  }, 2600);
-})();
 
 // ---------------------------------------------------------------------
 // Auth
@@ -652,61 +462,39 @@ auth.onAuthStateChanged(user => {
     loadStudents();
     loadPayments();
     loadCourses();
-    loadConfig();
     loadAnnouncements();
     loadUpdateConfig();
+    loadConfig();
   } else {
-    document.getElementById('loginGate').style.display = 'flex';
+    document.getElementById('loginGate').style.display = 'block';
     document.getElementById('appShell').style.display = 'none';
   }
 });
 
 // ---------------------------------------------------------------------
-// Bottom nav / page switching
+// Tabs
 // ---------------------------------------------------------------------
 
-const pageTitles = { dashboard: 'Dashboard', students: 'Students', chart: 'Chart Analysis', payments: 'Payments', courses: 'Courses & Lessons', config: 'Settings' };
-const fabActions = {
-  courses: () => openCourseSheet(),
-};
+document.getElementById('tabs').addEventListener('click', (e) => handleTabClick(e));
+document.getElementById('mobileTabs').addEventListener('click', (e) => handleTabClick(e));
 
-function goToPage(page) {
-  document.querySelectorAll('#bottomNav button').forEach(b => b.classList.remove('active'));
-  const navBtn = document.querySelector(`#bottomNav button[data-page="${page}"]`);
-  if (navBtn) navBtn.classList.add('active');
-  document.querySelectorAll('main > .page').forEach(s => s.classList.remove('active'));
-  document.getElementById('page-' + page).classList.add('active');
-  document.getElementById('pageTitle').textContent = pageTitles[page];
-  const fab = document.getElementById('fabBtn');
-  if (fabActions[page]) { fab.style.display = 'flex'; fab.onclick = fabActions[page]; }
-  else { fab.style.display = 'none'; }
-  window.scrollTo(0, 0);
-  if (page === 'chart' && !chartStarted) startChartDemo();
-}
-
-document.getElementById('bottomNav').addEventListener('click', (e) => {
-  const btn = e.target.closest('button[data-page]');
+function handleTabClick(e) {
+  const btn = e.target.closest('button[data-tab]');
   if (!btn) return;
-  goToPage(btn.dataset.page);
-});
+  const tabName = btn.dataset.tab;
+  document.querySelectorAll('#tabs button, #mobileTabs button').forEach(b => {
+    b.classList.toggle('active', b.dataset.tab === tabName);
+  });
+  document.querySelectorAll('main > section').forEach(s => s.style.display = 'none');
+  document.getElementById('tab-' + tabName).style.display = 'block';
+  window.scrollTo(0, 0);
+}
 
 function showToast(msg) {
   const t = document.getElementById('toast');
   t.textContent = msg;
   t.style.display = 'block';
-  setTimeout(() => t.style.display = 'none', 2600);
-}
-
-function openImgZoom(url) {
-  if (!url) return;
-  document.getElementById('imgZoomTarget').src = url;
-  document.getElementById('imgZoomBackdrop').style.display = 'flex';
-}
-function closeImgZoom() { document.getElementById('imgZoomBackdrop').style.display = 'none'; }
-function thumbOrFallback(url, icon) {
-  return url
-    ? `<img class="thumb" src="${url}" onclick="event.stopPropagation(); openImgZoom('${url}')" />`
-    : `<div class="thumb-fallback">${icon || '—'}</div>`;
+  setTimeout(() => t.style.display = 'none', 3000);
 }
 
 // ---------------------------------------------------------------------
@@ -730,18 +518,15 @@ async function loadDashboard() {
 
   const recent = [...students].sort((a, b) => (b.lastActiveAt || 0) - (a.lastActiveAt || 0)).slice(0, 8);
   const body = document.getElementById('recentActivityBody');
-  if (recent.length === 0) { body.innerHTML = '<div class="empty"><div class="empty-icon">👋</div>No students yet</div>'; return; }
+  if (recent.length === 0) { body.innerHTML = '<tr><td colspan="5" class="empty">No students yet</td></tr>'; return; }
   body.innerHTML = recent.map(s => `
-    <div class="row-card">
-      ${thumbOrFallback(s.photoUrl, '👤')}
-      <div class="info">
-        <div class="name">${s.studentName || 'Unnamed'}</div>
-        <div class="meta">${s.lastActiveAt ? new Date(s.lastActiveAt).toLocaleDateString() : '—'} · ${s.lessonsCompleted || 0} lessons · ${s.analysesRun || 0} analyses</div>
-      </div>
-      <div class="side">
-        <span class="badge ${s.subscriptionStatus || 'pending'}">${(s.subscriptionStatus || 'pending').toUpperCase()}</span>
-      </div>
-    </div>
+    <tr>
+      <td data-label="Student">${s.studentName || '—'}</td>
+      <td data-label="Last Active">${s.lastActiveAt ? new Date(s.lastActiveAt).toLocaleString() : '—'}</td>
+      <td data-label="Lessons">${s.lessonsCompleted || 0}</td>
+      <td data-label="Analyses">${s.analysesRun || 0}</td>
+      <td data-label="Status"><span class="badge ${s.subscriptionStatus || 'pending'}">${(s.subscriptionStatus || 'pending').toUpperCase()}</span></td>
+    </tr>
   `).join('');
 }
 
@@ -750,7 +535,6 @@ async function loadDashboard() {
 // ---------------------------------------------------------------------
 
 let studentsCache = [];
-let studentFilterVal = 'all';
 
 async function loadStudents() {
   const snap = await db.collection('students').orderBy('createdAt', 'desc').get();
@@ -758,36 +542,21 @@ async function loadStudents() {
   renderStudents();
 }
 
-document.getElementById('studentFilter').addEventListener('click', (e) => {
-  const btn = e.target.closest('button[data-f]');
-  if (!btn) return;
-  document.querySelectorAll('#studentFilter button').forEach(b => b.classList.remove('active'));
-  btn.classList.add('active');
-  studentFilterVal = btn.dataset.f;
-  renderStudents();
-});
-
 function renderStudents() {
   const body = document.getElementById('studentsBody');
-  let list = studentsCache;
-  if (studentFilterVal !== 'all') list = list.filter(s => (s.subscriptionStatus || 'pending') === studentFilterVal);
-  if (list.length === 0) { body.innerHTML = '<div class="empty"><div class="empty-icon">👥</div>No students found</div>'; return; }
-  body.innerHTML = list.map(s => `
-    <div class="row-card" onclick="viewStudent('${s.id}')">
-      ${thumbOrFallback(s.photoUrl, '👤')}
-      <div class="info">
-        <div class="name">${s.studentName || 'Unnamed'}</div>
-        <div class="meta">${s.fatherName ? 'S/O ' + s.fatherName : ''}${s.studentIdCardNumber ? ' · ' + s.studentIdCardNumber : ''}</div>
-      </div>
-      <div class="side">
-        <span class="badge ${s.subscriptionStatus || 'pending'}">${(s.subscriptionStatus || 'pending').toUpperCase()}</span>
-        <div class="row-actions">
-          ${s.subscriptionStatus !== 'active'
-            ? `<button class="small" onclick="event.stopPropagation(); setStudentStatus('${s.id}','active')">Activate</button>`
-            : `<button class="small danger" onclick="event.stopPropagation(); setStudentStatus('${s.id}','expired')">Deactivate</button>`}
-        </div>
-      </div>
-    </div>
+  if (studentsCache.length === 0) { body.innerHTML = '<tr><td colspan="6" class="empty">No students yet</td></tr>'; return; }
+  body.innerHTML = studentsCache.map(s => `
+    <tr>
+      <td>${s.photoUrl ? `<img class="thumb" src="${s.photoUrl}" />` : '—'}</td>
+      <td>${s.studentName || '—'}</td>
+      <td>${s.fatherName || '—'}</td>
+      <td>${s.studentIdCardNumber || '—'}</td>
+      <td><span class="badge ${s.subscriptionStatus || 'pending'}">${(s.subscriptionStatus || 'pending').toUpperCase()}</span></td>
+      <td class="row-actions">
+        <button class="small" onclick="viewStudent('${s.id}')">View</button>
+        ${s.subscriptionStatus !== 'active' ? `<button class="small" onclick="setStudentStatus('${s.id}','active')">Activate</button>` : `<button class="small danger" onclick="setStudentStatus('${s.id}','expired')">Deactivate</button>`}
+      </td>
+    </tr>
   `).join('');
 }
 
@@ -801,18 +570,11 @@ async function setStudentStatus(uid, status) {
   loadDashboard();
 }
 
-let currentStudentId = null;
-
 function viewStudent(uid) {
   const s = studentsCache.find(x => x.id === uid);
   if (!s) return;
-  currentStudentId = uid;
-  document.getElementById('studentSheetTitle').textContent = 'Student Details';
-  document.getElementById('studentModalBody').classList.remove('sheet-hidden');
-  document.getElementById('studentEditFields').classList.remove('sheet-visible');
-  document.getElementById('studentEditToggleBtn').textContent = 'Edit Profile';
   document.getElementById('studentModalBody').innerHTML = `
-    ${s.photoUrl ? `<img class="thumb" style="width:88px;height:88px; border-radius:16px;" src="${s.photoUrl}" onclick="openImgZoom('${s.photoUrl}')" />` : ''}
+    ${s.photoUrl ? `<img class="thumb" style="width:80px;height:80px;" src="${s.photoUrl}" />` : ''}
     <p><b>Name:</b> ${s.studentName || '—'}</p>
     <p><b>Father's Name:</b> ${s.fatherName || '—'}</p>
     <p><b>ID Card Number:</b> ${s.studentIdCardNumber || '—'}</p>
@@ -823,98 +585,34 @@ function viewStudent(uid) {
     <p><b>Subscription:</b> ${s.subscriptionStatus || 'pending'}</p>
     <p><b>Lessons Completed:</b> ${s.lessonsCompleted || 0}</p>
     <p><b>Analyses Run:</b> ${s.analysesRun || 0}</p>
-    ${s.idCardPhotoUrl ? `<p><b>ID Card Photo:</b><br/><img class="thumb" style="width:170px;height:106px; border-radius:12px;" src="${s.idCardPhotoUrl}" onclick="openImgZoom('${s.idCardPhotoUrl}')" /></p>` : ''}
+    ${s.idCardPhotoUrl ? `<p><b>ID Card Photo:</b><br/><img class="thumb" style="width:160px;height:100px;" src="${s.idCardPhotoUrl}" /></p>` : ''}
   `;
-
-  document.getElementById('editStudentName').value = s.studentName || '';
-  document.getElementById('editFatherName').value = s.fatherName || '';
-  document.getElementById('editIdCardNumber').value = s.studentIdCardNumber || '';
-  document.getElementById('editFatherAddress').value = s.fatherAddress || '';
-  document.getElementById('editQualification').value = s.qualification || '';
-  document.getElementById('editPhone').value = s.phone || '';
-  document.getElementById('editSubStatus').value = s.subscriptionStatus || 'pending';
-
   document.getElementById('studentModalBackdrop').style.display = 'flex';
 }
-
-function toggleStudentEdit() {
-  const viewMode = document.getElementById('studentModalBody');
-  const editMode = document.getElementById('studentEditFields');
-  const btn = document.getElementById('studentEditToggleBtn');
-  const isCurrentlyEditing = editMode.classList.contains('sheet-visible');
-  if (isCurrentlyEditing) {
-    saveStudentEdit();
-  } else {
-    viewMode.classList.add('sheet-hidden');
-    editMode.classList.add('sheet-visible');
-    document.getElementById('studentSheetTitle').textContent = 'Edit Student Profile';
-    btn.textContent = 'Save Changes';
-  }
-}
-
-async function saveStudentEdit() {
-  if (!currentStudentId) return;
-  const payload = {
-    studentName: document.getElementById('editStudentName').value,
-    fatherName: document.getElementById('editFatherName').value,
-    studentIdCardNumber: document.getElementById('editIdCardNumber').value,
-    fatherAddress: document.getElementById('editFatherAddress').value,
-    qualification: document.getElementById('editQualification').value,
-    phone: document.getElementById('editPhone').value,
-    subscriptionStatus: document.getElementById('editSubStatus').value,
-  };
-  await db.collection('students').doc(currentStudentId).update(payload);
-  showToast('Profile updated');
-  closeStudentModal();
-  loadStudents();
-  loadDashboard();
-}
-
-function closeStudentModal() { document.getElementById('studentModalBackdrop').style.display = 'none'; currentStudentId = null; }
+function closeStudentModal() { document.getElementById('studentModalBackdrop').style.display = 'none'; }
 
 // ---------------------------------------------------------------------
 // Payments
 // ---------------------------------------------------------------------
 
-let paymentsCache = [];
-let paymentFilterVal = 'all';
-
 async function loadPayments() {
   const snap = await db.collection('payments').orderBy('submittedAt', 'desc').limit(100).get();
-  paymentsCache = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-  renderPayments();
-}
-
-document.getElementById('paymentFilter').addEventListener('click', (e) => {
-  const btn = e.target.closest('button[data-f]');
-  if (!btn) return;
-  document.querySelectorAll('#paymentFilter button').forEach(b => b.classList.remove('active'));
-  btn.classList.add('active');
-  paymentFilterVal = btn.dataset.f;
-  renderPayments();
-});
-
-function renderPayments() {
+  const payments = snap.docs.map(d => ({ id: d.id, ...d.data() }));
   const body = document.getElementById('paymentsBody');
-  let list = paymentsCache;
-  if (paymentFilterVal !== 'all') list = list.filter(p => p.status === paymentFilterVal);
-  if (list.length === 0) { body.innerHTML = '<div class="empty"><div class="empty-icon">💳</div>No payments found</div>'; return; }
-  body.innerHTML = list.map(p => `
-    <div class="row-card">
-      ${thumbOrFallback(p.screenshotUrl, '🧾')}
-      <div class="info">
-        <div class="name">${p.studentName || 'Unnamed'}</div>
-        <div class="meta">${p.submittedAt ? new Date(p.submittedAt).toLocaleString() : '—'}</div>
-      </div>
-      <div class="side">
-        <span class="badge ${p.status}">${p.status.toUpperCase()}</span>
+  if (payments.length === 0) { body.innerHTML = '<tr><td colspan="5" class="empty">No payment submissions yet</td></tr>'; return; }
+  body.innerHTML = payments.map(p => `
+    <tr>
+      <td>${p.screenshotUrl ? `<img class="thumb" src="${p.screenshotUrl}" />` : '—'}</td>
+      <td>${p.studentName || '—'}</td>
+      <td>${p.submittedAt ? new Date(p.submittedAt).toLocaleString() : '—'}</td>
+      <td><span class="badge ${p.status}">${p.status.toUpperCase()}</span></td>
+      <td class="row-actions">
         ${p.status === 'pending' ? `
-          <div class="row-actions">
-            <button class="small" onclick="approvePayment('${p.id}','${p.uid}')">Approve</button>
-            <button class="small danger" onclick="rejectPayment('${p.id}')">Reject</button>
-          </div>` : ''}
-      </div>
-    </div>
+          <button class="small" onclick="approvePayment('${p.id}','${p.uid}')">Approve</button>
+          <button class="small danger" onclick="rejectPayment('${p.id}')">Reject</button>
+        ` : ''}
+      </td>
+    </tr>
   `).join('');
 }
 
@@ -942,39 +640,19 @@ async function rejectPayment(paymentId) {
 let coursesCache = [];
 let selectedCourseId = null;
 
-function openCourseSheet() { document.getElementById('courseModalBackdrop').style.display = 'flex'; }
-function closeCourseSheet() { document.getElementById('courseModalBackdrop').style.display = 'none'; }
-let editingLessonId = null;
-
-function openLessonSheet(lesson) {
-  if (!selectedCourseId) { showToast('Select a course first'); return; }
-  editingLessonId = lesson ? lesson.id : null;
-  document.getElementById('lessonSheetTitle').textContent = lesson ? 'Edit Lesson' : 'Add Lesson';
-  document.getElementById('lessonSaveBtn').textContent = lesson ? 'Save Changes' : 'Add Lesson';
-  document.getElementById('lessonTitle').value = lesson ? (lesson.title || '') : '';
-  document.getElementById('lessonTitleUr').value = lesson ? (lesson.titleUrdu || '') : '';
-  document.getElementById('lessonContent').value = lesson ? (lesson.contentText || '') : '';
-  document.getElementById('lessonContentUr').value = lesson ? (lesson.contentTextUrdu || '') : '';
-  document.getElementById('lessonYoutube').value = lesson ? (lesson.youtubeVideoId || '') : '';
-  document.getElementById('lessonPdf').value = lesson ? (lesson.pdfUrl || '') : '';
-  document.getElementById('lessonOrder').value = lesson ? (lesson.order || 1) : 1;
-  document.getElementById('lessonModalBackdrop').style.display = 'flex';
-}
-function closeLessonSheet() { document.getElementById('lessonModalBackdrop').style.display = 'none'; editingLessonId = null; }
-
 async function loadCourses() {
   const snap = await db.collection('courses').orderBy('order').get();
   coursesCache = snap.docs.map(d => ({ id: d.id, ...d.data() }));
   const list = document.getElementById('coursesList');
-  if (coursesCache.length === 0) { list.innerHTML = '<div class="empty"><div class="empty-icon">📚</div>No courses yet — tap + to add one</div>'; return; }
+  if (coursesCache.length === 0) { list.innerHTML = '<div class="empty">No courses yet</div>'; return; }
   list.innerHTML = coursesCache.map(c => `
-    <div class="course-item">
+    <div style="display:flex; justify-content:space-between; align-items:center; padding:10px; background:#070b0d; border-radius:8px;">
       <div>
-        <div class="t">${c.title}</div>
-        <div class="lvl">${c.level}</div>
+        <div style="color:#fff; font-size:12px;">${c.title}</div>
+        <div style="color:var(--silver-dim); font-size:10px;">${c.level}</div>
       </div>
       <div class="row-actions">
-        <button class="small" onclick="selectCourse('${c.id}','${c.title.replace(/'/g, "\\'")}')">Lessons</button>
+        <button class="small" onclick="selectCourse('${c.id}','${c.title.replace(/'/g, "\\'")}')">Manage Lessons</button>
         <button class="small danger" onclick="deleteCourse('${c.id}')">Delete</button>
       </div>
     </div>
@@ -996,7 +674,6 @@ async function createCourse() {
   document.getElementById('courseTitle').value = '';
   document.getElementById('courseTitleUr').value = '';
   document.getElementById('courseDesc').value = '';
-  closeCourseSheet();
   loadCourses();
 }
 
@@ -1014,7 +691,6 @@ function selectCourse(id, title) {
   document.getElementById('selectedCourseTitle').textContent = title;
   document.getElementById('lessonsPanel').style.display = 'block';
   loadLessons(id);
-  document.getElementById('lessonsPanel').scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 async function loadLessons(courseId) {
@@ -1023,39 +699,31 @@ async function loadLessons(courseId) {
   const list = document.getElementById('lessonsList');
   if (lessons.length === 0) { list.innerHTML = '<div class="empty">No lessons yet</div>'; return; }
   list.innerHTML = lessons.map(l => `
-    <div class="lesson-item">
-      <div class="t">${l.title} ${l.youtubeVideoId ? '🎬' : ''} ${l.pdfUrl ? '📄' : ''}</div>
-      <div class="row-actions">
-        <button class="small secondary" onclick='openLessonSheet(${JSON.stringify(l).replace(/'/g, "&apos;")})'>Edit</button>
-        <button class="small danger" onclick="deleteLesson('${courseId}','${l.id}')">Delete</button>
-      </div>
+    <div style="display:flex; justify-content:space-between; align-items:center; padding:10px; background:#070b0d; border-radius:8px;">
+      <div style="color:#fff; font-size:12px;">${l.title} ${(l.videoUrlEn || l.videoUrlUr) ? '🎬' : ''} ${l.pdfUrl ? '📄' : ''}</div>
+      <button class="small danger" onclick="deleteLesson('${courseId}','${l.id}')">Delete</button>
     </div>
   `).join('');
 }
 
-async function saveLesson() {
+async function createLesson() {
   if (!selectedCourseId) return;
   const title = document.getElementById('lessonTitle').value;
   if (!title) { showToast('Lesson title is required'); return; }
-  const payload = {
+  await db.collection('courses').doc(selectedCourseId).collection('lessons').add({
     courseId: selectedCourseId,
     title,
     titleUrdu: document.getElementById('lessonTitleUr').value,
     contentText: document.getElementById('lessonContent').value,
     contentTextUrdu: document.getElementById('lessonContentUr').value,
-    youtubeVideoId: document.getElementById('lessonYoutube').value,
+    videoUrlEn: document.getElementById('lessonVideoEn').value,
+    videoUrlUr: document.getElementById('lessonVideoUr').value,
+    videoThumbUrl: document.getElementById('lessonVideoThumb').value,
     pdfUrl: document.getElementById('lessonPdf').value,
     order: parseInt(document.getElementById('lessonOrder').value || '1'),
-  };
-  if (editingLessonId) {
-    await db.collection('courses').doc(selectedCourseId).collection('lessons').doc(editingLessonId).update(payload);
-    showToast('Lesson updated');
-  } else {
-    await db.collection('courses').doc(selectedCourseId).collection('lessons').add(payload);
-    showToast('Lesson added');
-  }
-  ['lessonTitle','lessonTitleUr','lessonContent','lessonContentUr','lessonYoutube','lessonPdf'].forEach(id => document.getElementById(id).value = '');
-  closeLessonSheet();
+  });
+  showToast('Lesson added');
+  ['lessonTitle','lessonTitleUr','lessonContent','lessonContentUr','lessonVideoEn','lessonVideoUr','lessonVideoThumb','lessonPdf'].forEach(id => document.getElementById(id).value = '');
   loadLessons(selectedCourseId);
 }
 
@@ -1066,146 +734,8 @@ async function deleteLesson(courseId, lessonId) {
 }
 
 // ---------------------------------------------------------------------
-// Candlestick Chart Demo (Canvas — no external libs)
+// Config (QR code, price, WhatsApp, Groq key)
 // ---------------------------------------------------------------------
-
-let chartStarted = false;
-let chartData = [];
-let chartInterval = null;
-let basePrice = 2385.40;
-
-function genCandle(prevClose) {
-  const volatility = prevClose * 0.0012;
-  const open = prevClose;
-  const close = open + (Math.random() - 0.5) * volatility * 2;
-  const high = Math.max(open, close) + Math.random() * volatility;
-  const low = Math.min(open, close) - Math.random() * volatility;
-  return { open, high, low, close };
-}
-
-function initChartData() {
-  chartData = [];
-  let price = basePrice;
-  for (let i = 0; i < 40; i++) {
-    const c = genCandle(price);
-    chartData.push(c);
-    price = c.close;
-  }
-}
-
-function drawChart() {
-  const canvas = document.getElementById('candleCanvas');
-  if (!canvas || chartData.length === 0) return;
-  const dpr = window.devicePixelRatio || 1;
-  const rect = canvas.getBoundingClientRect();
-  canvas.width = rect.width * dpr;
-  canvas.height = rect.height * dpr;
-  const ctx = canvas.getContext('2d');
-  ctx.scale(dpr, dpr);
-  const W = rect.width, H = rect.height;
-  ctx.clearRect(0, 0, W, H);
-
-  const prices = chartData.flatMap(c => [c.high, c.low]);
-  const max = Math.max(...prices), min = Math.min(...prices);
-  const pad = (max - min) * 0.1 || 1;
-  const top = max + pad, bottom = min - pad;
-  const range = top - bottom;
-
-  // grid lines
-  ctx.strokeStyle = '#12191d';
-  ctx.lineWidth = 1;
-  for (let i = 0; i <= 4; i++) {
-    const y = (H / 4) * i;
-    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
-  }
-
-  const candleW = W / chartData.length;
-  const bodyW = Math.max(candleW * 0.55, 2);
-
-  chartData.forEach((c, i) => {
-    const x = i * candleW + candleW / 2;
-    const yOpen = H - ((c.open - bottom) / range) * H;
-    const yClose = H - ((c.close - bottom) / range) * H;
-    const yHigh = H - ((c.high - bottom) / range) * H;
-    const yLow = H - ((c.low - bottom) / range) * H;
-    const up = c.close >= c.open;
-    const color = up ? '#34e39a' : '#ff5c6a';
-
-    ctx.strokeStyle = color;
-    ctx.lineWidth = 1;
-    ctx.beginPath(); ctx.moveTo(x, yHigh); ctx.lineTo(x, yLow); ctx.stroke();
-
-    ctx.fillStyle = color;
-    const bodyTop = Math.min(yOpen, yClose);
-    const bodyH = Math.max(Math.abs(yClose - yOpen), 1.5);
-    ctx.fillRect(x - bodyW / 2, bodyTop, bodyW, bodyH);
-  });
-}
-
-function updateChartHeader() {
-  const last = chartData[chartData.length - 1];
-  const first = chartData[0];
-  if (!last) return;
-  const change = last.close - first.open;
-  const changePct = (change / first.open) * 100;
-  document.getElementById('chartPrice').textContent = last.close.toFixed(2);
-  const changeEl = document.getElementById('chartChange');
-  changeEl.textContent = (change >= 0 ? '▲ ' : '▼ ') + Math.abs(change).toFixed(2) + ' (' + changePct.toFixed(2) + '%)';
-  changeEl.style.color = change >= 0 ? '#34e39a' : '#ff5c6a';
-}
-
-function startChartDemo() {
-  chartStarted = true;
-  initChartData();
-  drawChart();
-  updateChartHeader();
-  renderTicker();
-  if (chartInterval) clearInterval(chartInterval);
-  chartInterval = setInterval(() => {
-    const prev = chartData[chartData.length - 1];
-    const next = genCandle(prev.close);
-    chartData.push(next);
-    if (chartData.length > 40) chartData.shift();
-    drawChart();
-    updateChartHeader();
-    renderTicker();
-  }, 1800);
-}
-
-document.getElementById('chartFilter').addEventListener('click', (e) => {
-  const btn = e.target.closest('button[data-tf]');
-  if (!btn) return;
-  document.querySelectorAll('#chartFilter button').forEach(b => b.classList.remove('active'));
-  btn.classList.add('active');
-  initChartData();
-  drawChart();
-  updateChartHeader();
-});
-
-const tickerSymbols = ['EUR/USD', 'GBP/USD', 'BTC/USD', 'XAU/USD', 'US30'];
-function renderTicker() {
-  const list = document.getElementById('tickerList');
-  if (!list) return;
-  list.innerHTML = tickerSymbols.map(sym => {
-    const change = (Math.random() - 0.5) * 1.4;
-    const price = (sym === 'BTC/USD' ? 64000 + Math.random() * 2000 : sym === 'US30' ? 39500 + Math.random() * 300 : sym === 'XAU/USD' ? 2385 + Math.random() * 10 : 1 + Math.random() * 0.5);
-    const up = change >= 0;
-    return `
-      <div class="row-card" style="cursor:default;">
-        <div class="thumb-fallback">${up ? '📈' : '📉'}</div>
-        <div class="info">
-          <div class="name">${sym}</div>
-          <div class="meta">${price.toFixed(sym.includes('USD') && sym !== 'BTC/USD' && sym !== 'XAU/USD' && sym !== 'US30' ? 4 : 2)}</div>
-        </div>
-        <div class="side">
-          <span class="badge ${up ? 'active' : 'expired'}">${up ? '+' : ''}${change.toFixed(2)}%</span>
-        </div>
-      </div>
-    `;
-  }).join('');
-}
-
-window.addEventListener('resize', () => { if (chartStarted) drawChart(); });
 
 async function loadConfig() {
   const snap = await db.collection('config').doc('app').get();
@@ -1220,6 +750,92 @@ async function loadConfig() {
     preview.style.display = 'block';
   }
 }
+
+// ---------------------------------------------------------------------
+// Announcements
+// ---------------------------------------------------------------------
+
+async function loadAnnouncements() {
+  const snap = await db.collection('announcements').orderBy('createdAt', 'desc').limit(20).get();
+  const items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  const list = document.getElementById('announcementsList');
+  if (items.length === 0) { list.innerHTML = '<div class="empty">No announcements posted yet</div>'; return; }
+  list.innerHTML = items.map(a => `
+    <div style="padding:12px; background:#070b0d; border-radius:10px;">
+      <div style="display:flex; justify-content:space-between; align-items:center;">
+        <div style="color:#fff; font-size:12px; font-weight:600;">${a.title}</div>
+        <button class="small danger" onclick="deleteAnnouncement('${a.id}')">Delete</button>
+      </div>
+      <div style="color:var(--silver-dim); font-size:11px; margin-top:4px;">${a.message}</div>
+    </div>
+  `).join('');
+}
+
+async function createAnnouncement() {
+  const title = document.getElementById('annTitle').value;
+  if (!title) { showToast('Title is required'); return; }
+  await db.collection('announcements').add({
+    title,
+    titleUrdu: document.getElementById('annTitleUr').value,
+    message: document.getElementById('annMessage').value,
+    messageUrdu: document.getElementById('annMessageUr').value,
+    iconName: document.getElementById('annIcon').value,
+    createdAt: Date.now(),
+  });
+  showToast('Announcement posted');
+  ['annTitle','annTitleUr','annMessage','annMessageUr'].forEach(id => document.getElementById(id).value = '');
+  loadAnnouncements();
+}
+
+async function deleteAnnouncement(id) {
+  await db.collection('announcements').doc(id).delete();
+  showToast('Announcement deleted');
+  loadAnnouncements();
+}
+
+function sendAnnouncementPush() {
+  // Sending an actual FCM push requires a server key / Cloud Function,
+  // which this static admin panel intentionally doesn't embed (Server
+  // Key must never be exposed client-side). Posting the announcement
+  // above makes it appear in-app immediately; wire a small Cloud
+  // Function calling the FCM Admin SDK if you also want a push banner.
+  showToast('Announcement posted in-app. For push notifications, set up a small Cloud Function with your FCM server key (see README).');
+}
+
+// ---------------------------------------------------------------------
+// App Update Config
+// ---------------------------------------------------------------------
+
+async function loadUpdateConfig() {
+  const snap = await db.collection('config').doc('app_version').get();
+  if (!snap.exists) return;
+  const c = snap.data();
+  document.getElementById('updateVersionCode').value = c.latestVersionCode || '';
+  document.getElementById('updateVersionName').value = c.latestVersionName || '';
+  document.getElementById('updateApkUrl').value = c.apkUrl || '';
+  document.getElementById('updateNotes').value = c.releaseNotes || '';
+  document.getElementById('updateForce').checked = !!c.forceUpdate;
+}
+
+async function saveUpdateConfig() {
+  const versionCode = parseInt(document.getElementById('updateVersionCode').value || '0');
+  if (!versionCode) { showToast('Version code is required'); return; }
+  await db.collection('config').doc('app_version').set({
+    latestVersionCode: versionCode,
+    latestVersionName: document.getElementById('updateVersionName').value,
+    apkUrl: document.getElementById('updateApkUrl').value,
+    releaseNotes: document.getElementById('updateNotes').value,
+    forceUpdate: document.getElementById('updateForce').checked,
+  }, { merge: true });
+  const note = document.getElementById('updateSavedNote');
+  note.style.display = 'block';
+  setTimeout(() => note.style.display = 'none', 3000);
+  showToast('Update info published');
+}
+
+// ---------------------------------------------------------------------
+// Payment QR & general config
+// ---------------------------------------------------------------------
 
 async function saveConfig() {
   await db.collection('config').doc('app').set({
@@ -1257,107 +873,6 @@ async function uploadQrCode() {
     }
   };
   reader.readAsDataURL(file);
-}
-
-// ---------------------------------------------------------------------
-// Announcements (with edit support)
-// ---------------------------------------------------------------------
-
-let announcementsCache = [];
-let editingAnnouncementId = null;
-
-async function loadAnnouncements() {
-  const snap = await db.collection('announcements').orderBy('createdAt', 'desc').limit(20).get();
-  announcementsCache = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-  renderAnnouncements();
-}
-
-function renderAnnouncements() {
-  const list = document.getElementById('announcementsList');
-  if (announcementsCache.length === 0) { list.innerHTML = '<div class="empty"><div class="empty-icon">📢</div>No announcements yet</div>'; return; }
-  list.innerHTML = announcementsCache.map(a => `
-    <div class="lesson-item" style="align-items:flex-start;">
-      <div style="flex:1; min-width:0;">
-        <div class="t">${a.title}</div>
-        <div class="lvl" style="margin-top:4px; white-space:normal; line-height:1.4;">${a.message || ''}</div>
-      </div>
-      <div class="row-actions" style="flex-shrink:0;">
-        <button class="small secondary" onclick='openAnnouncementSheet(${JSON.stringify(a).replace(/'/g, "&apos;")})'>Edit</button>
-        <button class="small danger" onclick="deleteAnnouncement('${a.id}')">Delete</button>
-      </div>
-    </div>
-  `).join('');
-}
-
-function openAnnouncementSheet(ann) {
-  editingAnnouncementId = ann ? ann.id : null;
-  document.getElementById('announcementSheetTitle').textContent = ann ? 'Edit Announcement' : 'New Announcement';
-  document.getElementById('announcementSaveBtn').textContent = ann ? 'Save Changes' : 'Post Announcement';
-  document.getElementById('annTitle').value = ann ? (ann.title || '') : '';
-  document.getElementById('annTitleUr').value = ann ? (ann.titleUrdu || '') : '';
-  document.getElementById('annMessage').value = ann ? (ann.message || '') : '';
-  document.getElementById('annMessageUr').value = ann ? (ann.messageUrdu || '') : '';
-  document.getElementById('annIcon').value = ann ? (ann.iconName || 'Campaign') : 'Campaign';
-  document.getElementById('announcementModalBackdrop').style.display = 'flex';
-}
-function closeAnnouncementSheet() { document.getElementById('announcementModalBackdrop').style.display = 'none'; editingAnnouncementId = null; }
-
-async function saveAnnouncement() {
-  const title = document.getElementById('annTitle').value;
-  if (!title) { showToast('Title is required'); return; }
-  const payload = {
-    title,
-    titleUrdu: document.getElementById('annTitleUr').value,
-    message: document.getElementById('annMessage').value,
-    messageUrdu: document.getElementById('annMessageUr').value,
-    iconName: document.getElementById('annIcon').value,
-  };
-  if (editingAnnouncementId) {
-    await db.collection('announcements').doc(editingAnnouncementId).update(payload);
-    showToast('Announcement updated');
-  } else {
-    payload.createdAt = Date.now();
-    await db.collection('announcements').add(payload);
-    showToast('Announcement posted');
-  }
-  ['annTitle','annTitleUr','annMessage','annMessageUr'].forEach(id => document.getElementById(id).value = '');
-  closeAnnouncementSheet();
-  loadAnnouncements();
-}
-
-async function deleteAnnouncement(id) {
-  if (!confirm('Delete this announcement?')) return;
-  await db.collection('announcements').doc(id).delete();
-  showToast('Announcement deleted');
-  loadAnnouncements();
-}
-
-// ---------------------------------------------------------------------
-// App Update Config
-// ---------------------------------------------------------------------
-
-async function loadUpdateConfig() {
-  const snap = await db.collection('config').doc('app_version').get();
-  if (!snap.exists) return;
-  const c = snap.data();
-  document.getElementById('updateVersionCode').value = c.latestVersionCode || '';
-  document.getElementById('updateVersionName').value = c.latestVersionName || '';
-  document.getElementById('updateApkUrl').value = c.apkUrl || '';
-  document.getElementById('updateNotes').value = c.releaseNotes || '';
-  document.getElementById('updateForce').checked = !!c.forceUpdate;
-}
-
-async function saveUpdateConfig() {
-  const versionCode = parseInt(document.getElementById('updateVersionCode').value || '0');
-  if (!versionCode) { showToast('Version code is required'); return; }
-  await db.collection('config').doc('app_version').set({
-    latestVersionCode: versionCode,
-    latestVersionName: document.getElementById('updateVersionName').value,
-    apkUrl: document.getElementById('updateApkUrl').value,
-    releaseNotes: document.getElementById('updateNotes').value,
-    forceUpdate: document.getElementById('updateForce').checked,
-  }, { merge: true });
-  showToast('Update info published');
 }
 </script>
 </body>

@@ -22,12 +22,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.viewinterop.AndroidView
 import com.mitv.trademaster.data.AuthRepository
 import com.mitv.trademaster.data.FirestoreRepository
 import com.mitv.trademaster.data.SessionRepository
@@ -35,9 +33,7 @@ import com.mitv.trademaster.data.SessionState
 import com.mitv.trademaster.data.model.Course
 import com.mitv.trademaster.data.model.Lesson
 import com.mitv.trademaster.ui.theme.*
-import com.pierfrancescosoffritti.androidyoutubeplayer.core.player.PlayerConstants
-import com.pierfrancescosoffritti.androidyoutubeplayer.core.player.listeners.AbstractYouTubePlayerListener
-import com.pierfrancescosoffritti.androidyoutubeplayer.core.player.views.YouTubePlayerView as YTPlayerView
+import com.mitv.trademaster.ui.components.Mp4LessonPlayer
 import kotlinx.coroutines.launch
 
 /**
@@ -134,8 +130,13 @@ fun LessonDetailScreen(course: Course, language: String, onBack: () -> Unit, res
 
             LazyColumn(modifier = Modifier.weight(1f).padding(horizontal = 16.dp)) {
                 item {
-                    if (lesson.youtubeVideoId.isNotBlank()) {
-                        YouTubeEmbedWithFallback(videoId = lesson.youtubeVideoId, language = language)
+                    if (lesson.videoUrlEn.isNotBlank() || lesson.videoUrlUr.isNotBlank()) {
+                        Mp4LessonPlayer(
+                            videoUrlEn = lesson.videoUrlEn,
+                            videoUrlUr = lesson.videoUrlUr,
+                            posterUrl = lesson.videoThumbUrl,
+                            language = language
+                        )
                         Spacer(Modifier.height(20.dp))
                     }
 
@@ -333,62 +334,4 @@ private fun LessonListSheet(
             Spacer(Modifier.height(12.dp))
         }
     }
-}
-
-@Composable
-private fun YouTubeEmbedWithFallback(videoId: String, language: String) {
-    var hasError by remember { mutableStateOf(false) }
-    val context = LocalContext.current
-    val lifecycleOwner = LocalLifecycleOwner.current
-
-    if (hasError) {
-        Box(
-            modifier = Modifier.fillMaxWidth().height(180.dp).background(PanelDark, RoundedCornerShape(16.dp)),
-            contentAlignment = Alignment.Center
-        ) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Icon(Icons.Filled.SmartDisplay, contentDescription = null, tint = BrandSilverDim, modifier = Modifier.size(32.dp))
-                Spacer(Modifier.height(8.dp))
-                Text(
-                    if (language == "ur") "ویڈیو یہاں چل نہیں سکی" else "This video couldn't play here",
-                    color = BrandSilverDim, fontSize = 12.sp
-                )
-                Spacer(Modifier.height(10.dp))
-                OutlinedButton(
-                    onClick = {
-                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://www.youtube.com/watch?v=$videoId"))
-                        context.startActivity(intent)
-                    },
-                    colors = ButtonDefaults.outlinedButtonColors(contentColor = BrandGreen),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, BrandGreenDim),
-                    shape = RoundedCornerShape(10.dp)
-                ) {
-                    Icon(Icons.Filled.OpenInNew, contentDescription = null, modifier = Modifier.size(14.dp))
-                    Spacer(Modifier.width(6.dp))
-                    Text(if (language == "ur") "یوٹیوب پر دیکھیں" else "Watch on YouTube", fontSize = 12.sp)
-                }
-            }
-        }
-        return
-    }
-
-    AndroidView(
-        modifier = Modifier.fillMaxWidth().height(200.dp).clip(RoundedCornerShape(16.dp)),
-        factory = { ctx ->
-            YTPlayerView(ctx).apply {
-                lifecycleOwner.lifecycle.addObserver(this)
-                addYouTubePlayerListener(object : AbstractYouTubePlayerListener() {
-                    override fun onReady(youTubePlayer: com.pierfrancescosoffritti.androidyoutubeplayer.core.player.YouTubePlayer) {
-                        youTubePlayer.cueVideo(videoId, 0f)
-                    }
-                    override fun onError(
-                        youTubePlayer: com.pierfrancescosoffritti.androidyoutubeplayer.core.player.YouTubePlayer,
-                        error: PlayerConstants.PlayerError
-                    ) {
-                        hasError = true
-                    }
-                })
-            }
-        }
-    )
 }
