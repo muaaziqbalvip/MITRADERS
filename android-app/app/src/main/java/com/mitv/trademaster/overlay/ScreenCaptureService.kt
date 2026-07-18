@@ -55,9 +55,25 @@ class ScreenCaptureService : Service() {
         val resultCode = intent?.getIntExtra(EXTRA_RESULT_CODE, -1) ?: -1
         val data = intent?.getParcelableExtra<Intent>(EXTRA_DATA)
 
-        if (resultCode != -1 && data != null && mediaProjection == null) {
+        if (resultCode != -1 && data != null) {
+            // Tear down any stale projection/display before starting a fresh one —
+            // handles the case where the service process was still alive from a
+            // previous grant but the projection itself had already been stopped
+            // by the system (this was leaving isActive=true with a dead
+            // projection, causing "Capture & Analyze" to silently do nothing).
+            releaseProjection()
             val manager = getSystemService(MediaProjectionManager::class.java)
             mediaProjection = manager.getMediaProjection(resultCode, data)
+            mediaProjection?.registerCallback(object : MediaProjection.Callback() {
+                override fun onStop() {
+                    // System revoked the projection (e.g. user dismissed the
+                    // system capture indicator, or a long-running grant expired).
+                    // Reset state so the next tap re-requests consent instead of
+                    // silently failing forever.
+                    isActive = false
+                    latestFrame = null
+                }
+            }, handler)
             isActive = true
             setUpVirtualDisplay()
         }
@@ -129,11 +145,18 @@ class ScreenCaptureService : Service() {
         startForeground(1002, notification)
     }
 
+    private fun releaseProjection() {
+        virtualDisplay?.release()
+        virtualDisplay = null
+        imageReader?.close()
+        imageReader = null
+        mediaProjection?.stop()
+        mediaProjection = null
+    }
+
     override fun onDestroy() {
         super.onDestroy()
-        virtualDisplay?.release()
-        imageReader?.close()
-        mediaProjection?.stop()
+        releaseProjection()
         handlerThread?.quitSafely()
         latestFrame = null
         isActive = false

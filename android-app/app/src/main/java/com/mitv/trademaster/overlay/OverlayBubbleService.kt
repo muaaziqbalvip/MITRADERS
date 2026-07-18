@@ -265,13 +265,25 @@ class OverlayBubbleService : Service() {
         signalLabel.text = "  Reading screen…"
         CoroutineScope(Dispatchers.Default).launch {
             var frame: Bitmap? = null
-            repeat(10) {
+            repeat(15) {
                 delay(200)
+                // Bail out early if the projection got revoked mid-wait (e.g.
+                // user tapped "Stop" on the system capture notification) so we
+                // fall back to re-requesting consent instead of timing out.
+                if (!ScreenCaptureService.isActive) return@repeat
                 frame = ScreenCaptureService.latestFrame
                 if (frame != null) return@repeat
             }
             if (frame != null) {
                 analyzeBitmap(frame!!, signalDot, signalLabel)
+            } else if (!ScreenCaptureService.isActive) {
+                signalLabel.post {
+                    signalLabel.text = "  Tap again after granting screen permission..."
+                    val consentIntent = Intent(this@OverlayBubbleService, ScreenCaptureConsentActivity::class.java).apply {
+                        flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                    }
+                    startActivity(consentIntent)
+                }
             } else {
                 signalLabel.post { signalLabel.text = "  Couldn't read screen, try again" }
             }

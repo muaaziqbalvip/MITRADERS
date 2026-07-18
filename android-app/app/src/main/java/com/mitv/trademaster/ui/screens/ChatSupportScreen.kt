@@ -104,7 +104,17 @@ fun ChatSupportScreen() {
                     withContext(Dispatchers.IO) { GroqChatClient.sendMessage(config.groqApiKey, history, userText) }
                 }
 
-                val replyText = result.getOrElse { "Sorry, I couldn't process that. Please try again or WhatsApp us at +${config.whatsappNumber}." }
+                val replyText = result.getOrElse { err ->
+                    val msg = err.message.orEmpty()
+                    when {
+                        msg.contains("401") || msg.contains("invalid_api_key", ignoreCase = true) ->
+                            "AI Assistant is temporarily unavailable (invalid key) — please WhatsApp us at +${config.whatsappNumber} and we'll help directly."
+                        msg.contains("429") ->
+                            "AI Assistant is a bit busy right now — please try again in a moment or WhatsApp us at +${config.whatsappNumber}."
+                        else ->
+                            "Sorry, I couldn't process that. Please try again or WhatsApp us at +${config.whatsappNumber}."
+                    }
+                }
                 firestoreRepo.sendChatMessage(uid, ChatMessage(uid = uid, sender = "ai", text = replyText, timestamp = System.currentTimeMillis()))
             } finally {
                 isSending = false

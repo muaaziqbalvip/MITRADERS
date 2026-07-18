@@ -43,6 +43,14 @@ class ScreenCaptureConsentActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // onCreate can technically run again if the system recreates this
+        // activity (e.g. config change) before the result callback fires —
+        // guard so we don't stack two system consent dialogs on top of each
+        // other, which was silently swallowing the tap in some cases.
+        if (savedInstanceState != null) {
+            finish()
+            return
+        }
         val projectionManager = getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
         requestScreenCapture.launch(projectionManager.createScreenCaptureIntent())
     }
