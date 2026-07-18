@@ -17,6 +17,8 @@ data class SessionState(
     val accentTheme: String = "green",
     val completedLessonIds: Set<String> = emptySet(),
     val lastLessonByCourse: Map<String, String> = emptyMap(),
+    val religionAsked: Boolean = false,
+    val isMuslim: Boolean = false,
 )
 
 class SessionRepository(private val context: Context) {
@@ -27,6 +29,8 @@ class SessionRepository(private val context: Context) {
         val ACCENT_THEME = stringPreferencesKey("accent_theme")
         val COMPLETED_LESSONS = stringSetPreferencesKey("completed_lessons")
         val LAST_LESSON_MAP = stringPreferencesKey("last_lesson_map") // "courseId:lessonId,courseId2:lessonId2"
+        val RELIGION_ASKED = booleanPreferencesKey("religion_asked")
+        val IS_MUSLIM = booleanPreferencesKey("is_muslim")
     }
 
     val session: Flow<SessionState> = context.sessionStore.data.map { prefs ->
@@ -39,6 +43,8 @@ class SessionRepository(private val context: Context) {
             accentTheme = prefs[Keys.ACCENT_THEME] ?: "green",
             completedLessonIds = prefs[Keys.COMPLETED_LESSONS] ?: emptySet(),
             lastLessonByCourse = lastLessonMap,
+            religionAsked = prefs[Keys.RELIGION_ASKED] ?: false,
+            isMuslim = prefs[Keys.IS_MUSLIM] ?: false,
         )
     }
 
@@ -52,6 +58,14 @@ class SessionRepository(private val context: Context) {
 
     suspend fun setAccentTheme(theme: String) {
         context.sessionStore.edit { it[Keys.ACCENT_THEME] = theme }
+    }
+
+    /** Records the one-time "are you Muslim?" answer so we never ask again. */
+    suspend fun setReligionAnswer(isMuslim: Boolean) {
+        context.sessionStore.edit {
+            it[Keys.RELIGION_ASKED] = true
+            it[Keys.IS_MUSLIM] = isMuslim
+        }
     }
 
     /** Marks a lesson complete locally. Returns true if it was newly marked (not already complete). */

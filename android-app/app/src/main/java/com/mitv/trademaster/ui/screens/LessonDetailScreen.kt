@@ -46,6 +46,7 @@ fun LessonDetailScreen(course: Course, language: String, onBack: () -> Unit, res
     val repo = remember { FirestoreRepository() }
     val authRepo = remember { AuthRepository(context) }
     val sessionRepo = remember { SessionRepository(context) }
+    val soundManager = com.mitv.trademaster.util.rememberSoundManager()
     val session by sessionRepo.session.collectAsState(initial = SessionState())
 
     var lessons by remember { mutableStateOf<List<Lesson>>(emptyList()) }
@@ -221,6 +222,7 @@ fun LessonDetailScreen(course: Course, language: String, onBack: () -> Unit, res
                                 if (wasNew) {
                                     repo.incrementLessonsCompleted(uid)
                                     justCompleted = true
+                                    soundManager.playSuccess()
                                 }
                             }
                         },

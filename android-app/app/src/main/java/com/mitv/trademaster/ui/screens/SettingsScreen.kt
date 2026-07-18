@@ -31,6 +31,7 @@ import kotlinx.coroutines.launch
 
 @Composable
 fun SettingsScreen(language: String, onLanguageChanged: (String) -> Unit) {
+    val tapFeedback = com.mitv.trademaster.util.rememberTapFeedback()
     val context = LocalContext.current
     val sessionRepo = remember { SessionRepository(context) }
     val session by sessionRepo.session.collectAsState(initial = com.mitv.trademaster.data.SessionState())
@@ -131,7 +132,7 @@ fun SettingsScreen(language: String, onLanguageChanged: (String) -> Unit) {
                 val selected = session.accentTheme == key
                 Box(
                     modifier = Modifier.size(44.dp).clip(CircleShape).background(primary)
-                        .clickable { scope.launch { sessionRepo.setAccentTheme(key) } },
+                        .clickable { tapFeedback(); scope.launch { sessionRepo.setAccentTheme(key) } },
                     contentAlignment = Alignment.Center
                 ) {
                     if (selected) Icon(Icons.Filled.Check, contentDescription = null, tint = Color(0xFF04120B))

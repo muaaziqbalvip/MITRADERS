@@ -42,6 +42,8 @@ private const val TICK_MS = 150L // how often the forming candle's live price up
 
 @Composable
 fun PracticeScreen(language: String) {
+    val tapFeedback = com.mitv.trademaster.util.rememberTapFeedback()
+    val soundManager = com.mitv.trademaster.util.rememberSoundManager()
     var gameState by remember { mutableStateOf(GameState.SETUP) }
     var startingBalance by remember { mutableStateOf(50f) }
     var tradeAmount by remember { mutableStateOf(10f) }
@@ -115,7 +117,7 @@ fun PracticeScreen(language: String) {
         val guess = pendingGuess
         if (guess != null) {
             val correct = guess == final.isBullish
-            if (correct) { wins++; balance += tradeAmount } else { losses++; balance -= tradeAmount }
+            if (correct) { wins++; balance += tradeAmount; soundManager.playSuccess() } else { losses++; balance -= tradeAmount; soundManager.playError() }
             lastExplanation = explainCandle(final, language)
         } else {
             lastExplanation = null
@@ -210,7 +212,7 @@ fun PracticeScreen(language: String) {
             Spacer(Modifier.height(10.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Button(
-                    onClick = { pendingGuess = true },
+                    onClick = { tapFeedback(); pendingGuess = true },
                     colors = ButtonDefaults.buttonColors(
                         containerColor = if (pendingGuess == true) BrandGreen else BrandGreen.copy(alpha = 0.15f),
                         contentColor = if (pendingGuess == true) Color(0xFF04120B) else BrandGreen
@@ -219,7 +221,7 @@ fun PracticeScreen(language: String) {
                 ) { Icon(Icons.Filled.TrendingUp, contentDescription = null); Spacer(Modifier.width(6.dp)); Text(if (language == "ur") "اوپر" else "Up") }
 
                 Button(
-                    onClick = { pendingGuess = false },
+                    onClick = { tapFeedback(); pendingGuess = false },
                     colors = ButtonDefaults.buttonColors(
                         containerColor = if (pendingGuess == false) BrandRed else BrandRed.copy(alpha = 0.15f),
                         contentColor = if (pendingGuess == false) Color.White else BrandRed

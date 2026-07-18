@@ -34,6 +34,7 @@ private val tabs = listOf(Tab.Home, Tab.Analyzer, Tab.Learn, Tab.Practice, Tab.M
 fun MainShellScreen(language: String, onLanguageChanged: (String) -> Unit, onSignedOut: () -> Unit, initialDeepLink: String? = null) {
     val navController = rememberNavController()
     var selectedCourse by remember { mutableStateOf<Course?>(null) }
+    val tapFeedback = com.mitv.trademaster.util.rememberTapFeedback()
     var pendingResumeLessonId by remember { mutableStateOf<String?>(null) }
     var showMoreSheet by remember { mutableStateOf(false) }
     var moreDestination by remember { mutableStateOf<String?>(null) }
@@ -68,6 +69,7 @@ fun MainShellScreen(language: String, onLanguageChanged: (String) -> Unit, onSig
                         selected = selected,
                         alwaysShowLabel = true,
                         onClick = {
+                            tapFeedback()
                             if (isMore) {
                                 showMoreSheet = true
                             } else {
@@ -104,6 +106,7 @@ fun MainShellScreen(language: String, onLanguageChanged: (String) -> Unit, onSig
                     "chat" -> ChatSupportScreen()
                     "account" -> AccountScreen(language, onSignedOut)
                     "settings" -> SettingsScreen(language, onLanguageChanged)
+                    "islamic" -> IslamicScreen(language)
                 }
             } else {
                 NavHost(navController = navController, startDestination = Tab.Home.route) {
@@ -151,6 +154,7 @@ private fun MoreSheet(language: String, onDismiss: () -> Unit, onSelect: (String
     ModalBottomSheet(onDismissRequest = onDismiss, containerColor = PanelDark) {
         Column(Modifier.padding(20.dp)) {
             MoreItem(Icons.Filled.Chat, if (language == "ur") "سپورٹ چیٹ" else "Support Chat") { onSelect("chat") }
+            MoreItem(Icons.Filled.AutoAwesome, if (language == "ur") "روحانی گوشہ" else "Spiritual Corner") { onSelect("islamic") }
             MoreItem(Icons.Filled.Person, if (language == "ur") "اکاؤنٹ" else "Account") { onSelect("account") }
             MoreItem(Icons.Filled.Settings, if (language == "ur") "سیٹنگز" else "Settings") { onSelect("settings") }
             Spacer(Modifier.height(12.dp))
@@ -160,6 +164,7 @@ private fun MoreSheet(language: String, onDismiss: () -> Unit, onSelect: (String
 
 @Composable
 private fun MoreItem(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, onClick: () -> Unit) {
+    val tapFeedback = com.mitv.trademaster.util.rememberTapFeedback()
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -167,7 +172,7 @@ private fun MoreItem(icon: androidx.compose.ui.graphics.vector.ImageVector, labe
             .clickable(
                 interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
                 indication = null,
-                onClick = onClick
+                onClick = { tapFeedback(); onClick() }
             )
             .padding(16.dp),
         verticalAlignment = Alignment.CenterVertically
