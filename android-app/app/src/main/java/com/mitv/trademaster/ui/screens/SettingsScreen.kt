@@ -138,12 +138,6 @@ fun SettingsScreen(language: String, onLanguageChanged: (String) -> Unit) {
                 }
             }
         }
-        Spacer(Modifier.height(8.dp))
-        Text(
-            if (language == "ur") "نوٹ: تھیم رنگ ایپ ری اسٹارٹ پر مکمل طور پر لاگو ہوگا۔" else "Note: theme color fully applies after restarting the app.",
-            color = BrandSilverDim.copy(alpha = 0.7f), fontSize = 10.sp
-        )
-
         Spacer(Modifier.height(28.dp))
 
         // ---------- About ----------

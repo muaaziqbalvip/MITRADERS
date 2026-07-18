@@ -53,9 +53,14 @@ object MitvType {
 }
 
 @Composable
-fun MiTradeMasterTheme(content: @Composable () -> Unit) {
+fun MiTradeMasterTheme(accentTheme: String = "green", content: @Composable () -> Unit) {
+    val accent = accentFor(accentTheme)
+    val dynamicScheme = MitvColorScheme.copy(
+        primary = accent,
+        secondary = BrandSilver,
+    )
     MaterialTheme(
-        colorScheme = MitvColorScheme,
+        colorScheme = dynamicScheme,
         content = content
     )
 }

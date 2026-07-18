@@ -33,6 +33,7 @@ class ScreenCaptureService : Service() {
 
     companion object {
         @Volatile var latestFrame: Bitmap? = null
+        @Volatile var isActive: Boolean = false
         const val EXTRA_RESULT_CODE = "resultCode"
         const val EXTRA_DATA = "data"
     }
@@ -57,6 +58,7 @@ class ScreenCaptureService : Service() {
         if (resultCode != -1 && data != null && mediaProjection == null) {
             val manager = getSystemService(MediaProjectionManager::class.java)
             mediaProjection = manager.getMediaProjection(resultCode, data)
+            isActive = true
             setUpVirtualDisplay()
         }
         return START_STICKY
@@ -134,5 +136,6 @@ class ScreenCaptureService : Service() {
         mediaProjection?.stop()
         handlerThread?.quitSafely()
         latestFrame = null
+        isActive = false
     }
 }

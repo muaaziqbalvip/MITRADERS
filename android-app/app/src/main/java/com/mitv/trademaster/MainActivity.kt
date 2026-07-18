@@ -28,7 +28,10 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         val deepLink = intent?.getStringExtra(com.mitv.trademaster.notifications.MitvMessagingService.EXTRA_DEEP_LINK)
         setContent {
-            MiTradeMasterTheme {
+            val context = androidx.compose.ui.platform.LocalContext.current
+            val sessionRepo = remember { SessionRepository(context) }
+            val session by sessionRepo.session.collectAsState(initial = com.mitv.trademaster.data.SessionState())
+            MiTradeMasterTheme(accentTheme = session.accentTheme) {
                 AppRoot(initialDeepLink = deepLink)
             }
         }

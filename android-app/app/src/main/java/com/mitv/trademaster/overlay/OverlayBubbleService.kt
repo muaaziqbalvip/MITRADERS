@@ -4,6 +4,7 @@ import android.app.*
 import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
+import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Color
 import android.graphics.PixelFormat
@@ -24,6 +25,7 @@ import com.mitv.trademaster.analysis.ChartAnalyzer
 import com.mitv.trademaster.analysis.Direction
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.abs
 
@@ -243,7 +245,13 @@ class OverlayBubbleService : Service() {
 
     private fun runAnalysis(signalDot: View, signalLabel: TextView) {
         val bitmap = ScreenCaptureService.latestFrame
-        if (bitmap == null) {
+        if (bitmap != null) {
+            analyzeBitmap(bitmap, signalDot, signalLabel)
+            return
+        }
+
+        if (!ScreenCaptureService.isActive) {
+            // Permission truly never granted (or service was killed) — ask once.
             signalLabel.text = "  Tap again after granting screen permission..."
             val consentIntent = Intent(this, ScreenCaptureConsentActivity::class.java).apply {
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK
@@ -251,6 +259,26 @@ class OverlayBubbleService : Service() {
             startActivity(consentIntent)
             return
         }
+
+        // Permission already granted, service is running — the first frame just
+        // hasn't arrived yet. Retry briefly instead of asking for permission again.
+        signalLabel.text = "  Reading screen…"
+        CoroutineScope(Dispatchers.Default).launch {
+            var frame: Bitmap? = null
+            repeat(10) {
+                delay(200)
+                frame = ScreenCaptureService.latestFrame
+                if (frame != null) return@repeat
+            }
+            if (frame != null) {
+                analyzeBitmap(frame!!, signalDot, signalLabel)
+            } else {
+                signalLabel.post { signalLabel.text = "  Couldn't read screen, try again" }
+            }
+        }
+    }
+
+    private fun analyzeBitmap(bitmap: Bitmap, signalDot: View, signalLabel: TextView) {
         CoroutineScope(Dispatchers.Default).launch {
             val result = ChartAnalyzer.analyze(bitmap)
             val color = when (result.direction) {
