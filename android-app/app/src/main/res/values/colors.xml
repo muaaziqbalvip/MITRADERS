@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="bg_black">#05080A</color>
+    <color name="panel_dark">#0B1114</color>
+    <color name="panel_darker">#0F171B</color>
+    <color name="line_subtle">#1C2A2F</color>
+
+    <color name="brand_green">#34E39A</color>
+    <color name="brand_green_dim">#1A7A56</color>
+    <color name="brand_red">#FF5C6A</color>
+    <color name="brand_silver">#CDD6D8</color>
+    <color name="brand_silver_dim">#7C8B8F</color>
+
+    <color name="white">#FFFFFF</color>
+    <color name="black">#000000</color>
+</resources>
