@@ -433,6 +433,40 @@
         </div>
         <button class="block" onclick="saveConfig()">Save Settings</button>
       </div>
+
+      <div class="section-title">Announcements</div>
+      <div class="card">
+        <div id="announcementsList" style="margin-bottom:12px;"></div>
+        <button class="block secondary" onclick="openAnnouncementSheet()">+ New Announcement</button>
+      </div>
+
+      <div class="section-title">App Update</div>
+      <div class="card">
+        <p style="font-size:11px; color:var(--silver-dim); margin:0 0 14px;">
+          When a new APK is published, fill this in so installed apps detect and prompt for the update.
+        </p>
+        <div class="field">
+          <label>Latest Version Code (integer, must increase)</label>
+          <input id="updateVersionCode" type="number" inputmode="numeric" placeholder="5" />
+        </div>
+        <div class="field">
+          <label>Latest Version Name</label>
+          <input id="updateVersionName" placeholder="4.1.0" />
+        </div>
+        <div class="field">
+          <label>APK Download URL</label>
+          <input id="updateApkUrl" placeholder="https://github.com/you/repo/releases/download/v4.1.0/app.apk" />
+        </div>
+        <div class="field">
+          <label>Release Notes</label>
+          <textarea id="updateNotes" rows="3" placeholder="Bug fixes and new features."></textarea>
+        </div>
+        <label style="display:flex; align-items:center; gap:8px; font-size:12px; color:var(--silver); margin-bottom:14px;">
+          <input type="checkbox" id="updateForce" style="width:auto;" />
+          Force update (blocks app usage until updated)
+        </label>
+        <button class="block" onclick="saveUpdateConfig()">Publish Update Info</button>
+      </div>
     </section>
   </main>
 
@@ -528,6 +562,31 @@
   </div>
 </div>
 
+<!-- Add/Edit announcement sheet -->
+<div class="modal-backdrop" id="announcementModalBackdrop">
+  <div class="sheet">
+    <div class="sheet-handle"></div>
+    <h3 id="announcementSheetTitle">New Announcement</h3>
+    <div class="field"><label>Title (English)</label><input id="annTitle" placeholder="New course added!" /></div>
+    <div class="field"><label>Title (Urdu)</label><input id="annTitleUr" placeholder="نیا کورس شامل کر دیا گیا!" /></div>
+    <div class="field"><label>Message (English)</label><textarea id="annMessage" rows="3" placeholder="Check out the new Risk Management course."></textarea></div>
+    <div class="field"><label>Message (Urdu)</label><textarea id="annMessageUr" rows="3" placeholder="نیا رسک مینجمنٹ کورس دیکھیں۔"></textarea></div>
+    <div class="field">
+      <label>Icon</label>
+      <select id="annIcon">
+        <option value="Campaign">Campaign</option>
+        <option value="NewReleases">New Release</option>
+        <option value="Star">Star</option>
+        <option value="Warning">Warning</option>
+      </select>
+    </div>
+    <div style="display:flex; gap:8px; margin-top:8px;">
+      <button class="secondary" style="flex:1;" onclick="closeAnnouncementSheet()">Cancel</button>
+      <button style="flex:1;" id="announcementSaveBtn" onclick="saveAnnouncement()">Post Announcement</button>
+    </div>
+  </div>
+</div>
+
 <!-- Image zoom viewer -->
 <div class="img-zoom-backdrop" id="imgZoomBackdrop" onclick="closeImgZoom()">
   <img id="imgZoomTarget" src="" />
@@ -594,6 +653,8 @@ auth.onAuthStateChanged(user => {
     loadPayments();
     loadCourses();
     loadConfig();
+    loadAnnouncements();
+    loadUpdateConfig();
   } else {
     document.getElementById('loginGate').style.display = 'flex';
     document.getElementById('appShell').style.display = 'none';
@@ -1196,6 +1257,107 @@ async function uploadQrCode() {
     }
   };
   reader.readAsDataURL(file);
+}
+
+// ---------------------------------------------------------------------
+// Announcements (with edit support)
+// ---------------------------------------------------------------------
+
+let announcementsCache = [];
+let editingAnnouncementId = null;
+
+async function loadAnnouncements() {
+  const snap = await db.collection('announcements').orderBy('createdAt', 'desc').limit(20).get();
+  announcementsCache = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  renderAnnouncements();
+}
+
+function renderAnnouncements() {
+  const list = document.getElementById('announcementsList');
+  if (announcementsCache.length === 0) { list.innerHTML = '<div class="empty"><div class="empty-icon">📢</div>No announcements yet</div>'; return; }
+  list.innerHTML = announcementsCache.map(a => `
+    <div class="lesson-item" style="align-items:flex-start;">
+      <div style="flex:1; min-width:0;">
+        <div class="t">${a.title}</div>
+        <div class="lvl" style="margin-top:4px; white-space:normal; line-height:1.4;">${a.message || ''}</div>
+      </div>
+      <div class="row-actions" style="flex-shrink:0;">
+        <button class="small secondary" onclick='openAnnouncementSheet(${JSON.stringify(a).replace(/'/g, "&apos;")})'>Edit</button>
+        <button class="small danger" onclick="deleteAnnouncement('${a.id}')">Delete</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+function openAnnouncementSheet(ann) {
+  editingAnnouncementId = ann ? ann.id : null;
+  document.getElementById('announcementSheetTitle').textContent = ann ? 'Edit Announcement' : 'New Announcement';
+  document.getElementById('announcementSaveBtn').textContent = ann ? 'Save Changes' : 'Post Announcement';
+  document.getElementById('annTitle').value = ann ? (ann.title || '') : '';
+  document.getElementById('annTitleUr').value = ann ? (ann.titleUrdu || '') : '';
+  document.getElementById('annMessage').value = ann ? (ann.message || '') : '';
+  document.getElementById('annMessageUr').value = ann ? (ann.messageUrdu || '') : '';
+  document.getElementById('annIcon').value = ann ? (ann.iconName || 'Campaign') : 'Campaign';
+  document.getElementById('announcementModalBackdrop').style.display = 'flex';
+}
+function closeAnnouncementSheet() { document.getElementById('announcementModalBackdrop').style.display = 'none'; editingAnnouncementId = null; }
+
+async function saveAnnouncement() {
+  const title = document.getElementById('annTitle').value;
+  if (!title) { showToast('Title is required'); return; }
+  const payload = {
+    title,
+    titleUrdu: document.getElementById('annTitleUr').value,
+    message: document.getElementById('annMessage').value,
+    messageUrdu: document.getElementById('annMessageUr').value,
+    iconName: document.getElementById('annIcon').value,
+  };
+  if (editingAnnouncementId) {
+    await db.collection('announcements').doc(editingAnnouncementId).update(payload);
+    showToast('Announcement updated');
+  } else {
+    payload.createdAt = Date.now();
+    await db.collection('announcements').add(payload);
+    showToast('Announcement posted');
+  }
+  ['annTitle','annTitleUr','annMessage','annMessageUr'].forEach(id => document.getElementById(id).value = '');
+  closeAnnouncementSheet();
+  loadAnnouncements();
+}
+
+async function deleteAnnouncement(id) {
+  if (!confirm('Delete this announcement?')) return;
+  await db.collection('announcements').doc(id).delete();
+  showToast('Announcement deleted');
+  loadAnnouncements();
+}
+
+// ---------------------------------------------------------------------
+// App Update Config
+// ---------------------------------------------------------------------
+
+async function loadUpdateConfig() {
+  const snap = await db.collection('config').doc('app_version').get();
+  if (!snap.exists) return;
+  const c = snap.data();
+  document.getElementById('updateVersionCode').value = c.latestVersionCode || '';
+  document.getElementById('updateVersionName').value = c.latestVersionName || '';
+  document.getElementById('updateApkUrl').value = c.apkUrl || '';
+  document.getElementById('updateNotes').value = c.releaseNotes || '';
+  document.getElementById('updateForce').checked = !!c.forceUpdate;
+}
+
+async function saveUpdateConfig() {
+  const versionCode = parseInt(document.getElementById('updateVersionCode').value || '0');
+  if (!versionCode) { showToast('Version code is required'); return; }
+  await db.collection('config').doc('app_version').set({
+    latestVersionCode: versionCode,
+    latestVersionName: document.getElementById('updateVersionName').value,
+    apkUrl: document.getElementById('updateApkUrl').value,
+    releaseNotes: document.getElementById('updateNotes').value,
+    forceUpdate: document.getElementById('updateForce').checked,
+  }, { merge: true });
+  showToast('Update info published');
 }
 </script>
 </body>
