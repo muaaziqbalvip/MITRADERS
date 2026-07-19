@@ -405,6 +405,15 @@
         <div id="lessonsList" style="margin-bottom:12px;"></div>
         <button class="block secondary" onclick="openLessonSheet()">+ Add Lesson</button>
       </div>
+
+      <div class="card" id="quizPanel" style="display:none; margin-top:16px;">
+        <h2>Course Quiz — <span id="quizCourseTitle"></span></h2>
+        <p style="font-size:11.5px; color:var(--silver-dim); margin:0 0 12px;" id="quizStatusText">
+          No quiz generated yet for this course.
+        </p>
+        <div id="quizPreview" style="display:none; margin-bottom:12px;"></div>
+        <button class="block" id="generateQuizBtn" onclick="generateQuizForCourse()">Generate Quiz (reads all lessons via AI)</button>
+      </div>
     </section>
 
     <!-- ============ SETTINGS / CONFIG ============ -->
@@ -444,10 +453,23 @@
           <input id="configWhatsapp" placeholder="923062015326" inputmode="tel" />
         </div>
         <div class="field">
-          <label>Groq API Key (support chat + AI quiz generator)</label>
+          <label>Groq API Key (support chat, ships inside the app)</label>
           <input id="configGroqKey" placeholder="gsk_..." type="password" />
         </div>
         <button class="block" onclick="saveConfig()">Save Settings</button>
+      </div>
+
+      <div class="section-title">AI Quiz Generator</div>
+      <div class="card">
+        <p style="font-size:11.5px; color:var(--silver-dim); margin:0 0 12px;">
+          Used only here in the admin panel to generate course quizzes — this key never ships inside the student app,
+          so keep it separate from the chat key above for better security.
+        </p>
+        <div class="field">
+          <label>Quiz Generator Groq API Key</label>
+          <input id="quizGroqKey" placeholder="gsk_..." type="password" />
+        </div>
+        <button class="block secondary" onclick="saveQuizGroqKey()">Save Quiz Key</button>
       </div>
 
       <div class="section-title">Announcements</div>
@@ -671,6 +693,7 @@ auth.onAuthStateChanged(user => {
     loadPayments();
     loadCourses();
     loadConfig();
+    loadQuizGroqKey();
     loadAnnouncements();
     loadUpdateConfig();
   } else {
@@ -1034,6 +1057,9 @@ function selectCourse(id, title) {
   document.getElementById('selectedCourseTitle').textContent = title;
   document.getElementById('lessonsPanel').style.display = 'block';
   loadLessons(id);
+  document.getElementById('quizCourseTitle').textContent = title;
+  document.getElementById('quizPanel').style.display = 'block';
+  loadQuizStatus(id);
   document.getElementById('lessonsPanel').scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
@@ -1051,6 +1077,130 @@ async function loadLessons(courseId) {
       </div>
     </div>
   `).join('');
+}
+
+async function saveQuizGroqKey() {
+  const key = document.getElementById('quizGroqKey').value;
+  if (!key) { showToast('Enter a Groq API key first'); return; }
+  await db.collection('config').doc('quizGenerator').set({ groqApiKey: key }, { merge: true });
+  showToast('Quiz generator key saved');
+}
+
+async function loadQuizGroqKey() {
+  const snap = await db.collection('config').doc('quizGenerator').get();
+  if (snap.exists && snap.data().groqApiKey) {
+    document.getElementById('quizGroqKey').value = snap.data().groqApiKey;
+  }
+}
+
+async function loadQuizStatus(courseId) {
+  const snap = await db.collection('courses').doc(courseId).collection('quiz').doc('generated').get();
+  const statusText = document.getElementById('quizStatusText');
+  const preview = document.getElementById('quizPreview');
+  const btn = document.getElementById('generateQuizBtn');
+  if (snap.exists && snap.data().questions && snap.data().questions.length > 0) {
+    const q = snap.data();
+    const generatedDate = q.generatedAt ? new Date(q.generatedAt).toLocaleDateString() : 'unknown date';
+    statusText.textContent = `✅ Quiz ready — ${q.questions.length} questions, generated ${generatedDate}.`;
+    preview.style.display = 'block';
+    preview.innerHTML = q.questions.map((qq, i) => `
+      <div class="lesson-item"><div class="t">${i + 1}. ${qq.question}</div></div>
+    `).join('');
+    btn.textContent = 'Regenerate Quiz (overwrites current one)';
+  } else {
+    statusText.textContent = 'No quiz generated yet for this course.';
+    preview.style.display = 'none';
+    preview.innerHTML = '';
+    btn.textContent = 'Generate Quiz (reads all lessons via AI)';
+  }
+}
+
+async function generateQuizForCourse() {
+  if (!selectedCourseId) return;
+  const btn = document.getElementById('generateQuizBtn');
+  const statusText = document.getElementById('quizStatusText');
+
+  const keySnap = await db.collection('config').doc('quizGenerator').get();
+  const groqKey = keySnap.exists ? keySnap.data().groqApiKey : '';
+  if (!groqKey) { showToast('Set the Quiz Generator Groq key first (below)'); return; }
+
+  const lessonsSnap = await db.collection('courses').doc(selectedCourseId).collection('lessons').orderBy('order').get();
+  const lessons = lessonsSnap.docs.map(d => d.data());
+  if (lessons.length === 0) { showToast('This course has no lessons yet'); return; }
+
+  const courseTitle = document.getElementById('quizCourseTitle').textContent;
+  const lessonsText = lessons.map(l => `Lesson: ${l.title}\n${l.contentText || ''}`).join('\n\n').slice(0, 12000);
+
+  btn.disabled = true;
+  btn.textContent = 'Generating... (AI is reading all lessons, ~20-40s)';
+  statusText.textContent = 'Please wait, do not close this page.';
+
+  try {
+    const prompt = `You are creating a course-completion quiz for a trading education app.
+Course: "${courseTitle}"
+
+Below is the full content of every lesson in this course. Read it carefully and write EXACTLY 8 multiple-choice questions that test real understanding of the material (not trivia about wording). Cover different lessons — don't cluster all questions on one topic.
+
+Each question needs exactly 4 options, one correct answer, and a one-sentence explanation of why it's correct. Provide BOTH an English version and an Urdu (real Urdu script, not Roman) version of the question, options, and explanation.
+
+Respond with ONLY a raw JSON array (no markdown fences, no preamble), in exactly this shape:
+[
+  {
+    "question": "English question text",
+    "questionUrdu": "اردو سوال کا متن",
+    "options": ["A", "B", "C", "D"],
+    "optionsUrdu": ["اے", "بی", "سی", "ڈی"],
+    "correctIndex": 0,
+    "explanation": "Why this is correct, one sentence.",
+    "explanationUrdu": "یہ کیوں درست ہے، ایک جملہ۔"
+  }
+]
+
+LESSON CONTENT:
+${lessonsText}`;
+
+    const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${groqKey}` },
+      body: JSON.stringify({
+        model: 'llama-3.1-8b-instant',
+        messages: [
+          { role: 'system', content: 'You output only valid raw JSON, never markdown code fences or commentary.' },
+          { role: 'user', content: prompt },
+        ],
+        max_tokens: 4000,
+        temperature: 0.5,
+      }),
+    });
+
+    if (!res.ok) {
+      const errBody = await res.text();
+      throw new Error(`Groq API error (${res.status}): ${errBody.slice(0, 200)}`);
+    }
+
+    const data = await res.json();
+    let raw = data.choices[0].message.content.trim();
+    raw = raw.replace(/^```json/, '').replace(/^```/, '').replace(/```$/, '').trim();
+    const questions = JSON.parse(raw);
+
+    if (!Array.isArray(questions) || questions.length === 0) {
+      throw new Error('AI did not return any valid questions');
+    }
+
+    await db.collection('courses').doc(selectedCourseId).collection('quiz').doc('generated').set({
+      courseId: selectedCourseId,
+      questions,
+      generatedAt: Date.now(),
+    });
+
+    showToast(`Quiz generated: ${questions.length} questions`);
+    loadQuizStatus(selectedCourseId);
+  } catch (e) {
+    showToast('Quiz generation failed: ' + e.message);
+    statusText.textContent = 'Generation failed — see toast message. Try again.';
+  } finally {
+    btn.disabled = false;
+  }
 }
 
 async function saveLesson() {

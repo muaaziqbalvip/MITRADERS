@@ -10,6 +10,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.HourglassEmpty
 import androidx.compose.material.icons.filled.Lightbulb
 import androidx.compose.material.icons.filled.Replay
 import androidx.compose.material.icons.filled.WorkspacePremium
@@ -24,23 +25,18 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.mitv.trademaster.data.FirestoreRepository
-import com.mitv.trademaster.data.RemoteConfigRepository
 import com.mitv.trademaster.data.SessionRepository
 import com.mitv.trademaster.data.model.Course
 import com.mitv.trademaster.data.model.CourseQuiz
-import com.mitv.trademaster.data.model.Lesson
-import com.mitv.trademaster.data.model.QuizQuestion
-import com.mitv.trademaster.network.GroqQuizClient
 import com.mitv.trademaster.ui.theme.*
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 
 private const val PASS_THRESHOLD = 0.7f // 70% correct required to pass
 
 private sealed class QuizLoadState {
     data object Loading : QuizLoadState()
     data class Error(val message: String) : QuizLoadState()
+    data class NotReady(val message: String) : QuizLoadState()
     data class Ready(val quiz: CourseQuiz) : QuizLoadState()
 }
 
@@ -48,7 +44,6 @@ private sealed class QuizLoadState {
 fun QuizScreen(course: Course, language: String, onBack: () -> Unit, onPassed: () -> Unit) {
     val context = LocalContext.current
     val repo = remember { FirestoreRepository() }
-    val configRepo = remember { RemoteConfigRepository() }
     val sessionRepo = remember { SessionRepository(context) }
     val soundManager = com.mitv.trademaster.util.rememberSoundManager()
 
@@ -57,53 +52,31 @@ fun QuizScreen(course: Course, language: String, onBack: () -> Unit, onPassed: (
     var submitted by remember { mutableStateOf(false) }
     var scorePercent by remember { mutableStateOf(0) }
 
-    suspend fun loadOrGenerateQuiz() {
+    // The quiz is generated once, from the admin panel, using a Groq key that
+    // never ships inside the app. The app only ever reads the cached result —
+    // this avoids exposing the API key to every device and avoids every
+    // student's phone independently calling Groq (slow + wasteful + the
+    // permission-denied / mid-navigation-cancel crashes that happened when
+    // generation ran on-device).
+    suspend fun loadQuiz() {
         loadState = QuizLoadState.Loading
         try {
             val cached = repo.getCourseQuiz(course.id)
-            if (cached != null && cached.questions.isNotEmpty()) {
-                loadState = QuizLoadState.Ready(cached)
-                return
-            }
-
-            val lessons: List<Lesson> = repo.getLessons(course.id)
-            if (lessons.isEmpty()) {
-                loadState = QuizLoadState.Error(if (language == "ur") "اس کورس میں کوئی سبق نہیں ملا" else "No lessons found for this course")
-                return
-            }
-
-            val config = configRepo.getConfig()
-            if (config.groqApiKey.isBlank()) {
-                loadState = QuizLoadState.Error(
-                    if (language == "ur") "کوئز فی الحال دستیاب نہیں — بعد میں کوشش کریں" else "Quiz isn't available right now — please try again later"
+            loadState = if (cached != null && cached.questions.isNotEmpty()) {
+                QuizLoadState.Ready(cached)
+            } else {
+                QuizLoadState.NotReady(
+                    if (language == "ur") "کوئز ابھی تیار نہیں ہوا — جلد دستیاب ہوگا"
+                    else "Quiz isn't ready yet — check back soon"
                 )
-                return
             }
-
-            val lessonsText = lessons.sortedBy { it.order }.joinToString("\n\n") { l ->
-                "Lesson: ${l.title}\n${l.contentText}"
-            }.take(12000) // keep prompt size reasonable
-
-            val result = GroqQuizClient.generateQuiz(config.groqApiKey, course.title, lessonsText)
-            result.fold(
-                onSuccess = { questions ->
-                    val quiz = CourseQuiz(courseId = course.id, questions = questions, generatedAt = System.currentTimeMillis())
-                    try { repo.saveCourseQuiz(quiz) } catch (e: Exception) { /* still show it even if caching failed */ }
-                    loadState = QuizLoadState.Ready(quiz)
-                },
-                onFailure = { err ->
-                    loadState = QuizLoadState.Error(
-                        (if (language == "ur") "کوئز نہیں بن سکا: " else "Could not generate quiz: ") + err.message
-                    )
-                }
-            )
         } catch (e: Exception) {
             loadState = QuizLoadState.Error((if (language == "ur") "خرابی: " else "Error: ") + e.message)
         }
     }
 
     LaunchedEffect(course.id) {
-        withContext(Dispatchers.IO) { loadOrGenerateQuiz() }
+        loadQuiz()
     }
 
     Column(modifier = Modifier.fillMaxSize().background(BgBlack)) {
@@ -122,13 +95,23 @@ fun QuizScreen(course: Course, language: String, onBack: () -> Unit, onPassed: (
         when (val state = loadState) {
             is QuizLoadState.Loading -> {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator(color = BrandGreen)
+                }
+            }
+            is QuizLoadState.NotReady -> {
+                val scope = rememberCoroutineScope()
+                Box(Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        CircularProgressIndicator(color = BrandGreen)
+                        Icon(Icons.Filled.HourglassEmpty, contentDescription = null, tint = BrandSilverDim, modifier = Modifier.size(32.dp))
                         Spacer(Modifier.height(14.dp))
-                        Text(
-                            if (language == "ur") "AI آپ کے کورس کے لیے کوئز تیار کر رہا ہے..." else "AI is preparing your course quiz...",
-                            color = BrandSilverDim, fontSize = 12.sp
-                        )
+                        Text(state.message, color = BrandSilverDim, fontSize = 13.sp, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                        Spacer(Modifier.height(16.dp))
+                        OutlinedButton(
+                            onClick = { scope.launch { loadQuiz() } },
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = BrandGreen),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, BrandGreenDim),
+                            shape = RoundedCornerShape(12.dp)
+                        ) { Text(if (language == "ur") "دوبارہ چیک کریں" else "Check Again") }
                     }
                 }
             }
@@ -139,7 +122,7 @@ fun QuizScreen(course: Course, language: String, onBack: () -> Unit, onPassed: (
                         Text(state.message, color = BrandRed, fontSize = 13.sp, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
                         Spacer(Modifier.height(16.dp))
                         Button(
-                            onClick = { scope.launch { withContext(Dispatchers.IO) { loadOrGenerateQuiz() } } },
+                            onClick = { scope.launch { loadQuiz() } },
                             colors = ButtonDefaults.buttonColors(containerColor = BrandGreen, contentColor = Color(0xFF04120B)),
                             shape = RoundedCornerShape(12.dp)
                         ) { Text(if (language == "ur") "دوبارہ کوشش کریں" else "Try Again") }
