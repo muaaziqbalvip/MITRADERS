@@ -412,7 +412,8 @@
           No quiz generated yet for this course.
         </p>
         <div id="quizPreview" style="display:none; margin-bottom:12px;"></div>
-        <button class="block" id="generateQuizBtn" onclick="generateQuizForCourse()">Generate Quiz (reads all lessons via AI)</button>
+        <button class="block" id="generateQuizBtn" onclick="generateQuizForCourse()">Generate Quiz (small request per lesson)</button>
+        <button class="block secondary" id="cancelQuizGenBtn" style="display:none; margin-top:8px;" onclick="cancelQuizGeneration()">Pause After Current Lesson</button>
       </div>
     </section>
 
@@ -1079,11 +1080,73 @@ async function loadLessons(courseId) {
   `).join('');
 }
 
+// ---------------------------------------------------------------------
+// Quiz generation — chunked, one small request per lesson instead of one
+// giant request for the whole course. This keeps every request small
+// (fewer tokens = cheaper + less likely to hit rate limits), and lets
+// generation pause/resume cleanly: progress is saved to Firestore after
+// every single lesson, so closing the tab or hitting a rate limit never
+// loses work — clicking "Generate" again just continues from where it
+// stopped instead of starting over or duplicating questions.
+// ---------------------------------------------------------------------
+
+let quizGenerationCancelled = false;
+
 async function saveQuizGroqKey() {
   const key = document.getElementById('quizGroqKey').value;
   if (!key) { showToast('Enter a Groq API key first'); return; }
   await db.collection('config').doc('quizGenerator').set({ groqApiKey: key }, { merge: true });
   showToast('Quiz generator key saved');
+}
+
+function cancelQuizGeneration() {
+  quizGenerationCancelled = true;
+  document.getElementById('quizStatusText').textContent = 'Pausing after the current lesson finishes...';
+}
+
+/** Sleep helper for backoff delays. */
+function sleepMs(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
+
+/**
+ * Calls Groq with automatic retry on rate-limit (429) responses.
+ * Reads the Retry-After header when present; otherwise backs off
+ * 5s, 15s, 30s, 60s, 60s... and keeps trying rather than failing,
+ * since the whole point is "wait out the limit, don't give up".
+ */
+async function callGroqWithRetry(groqKey, messages, maxTokens, onWaiting) {
+  const backoffSchedule = [5000, 15000, 30000, 60000, 60000, 60000];
+  let attempt = 0;
+
+  while (true) {
+    if (quizGenerationCancelled) throw new Error('CANCELLED');
+
+    const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${groqKey}` },
+      body: JSON.stringify({
+        model: 'llama-3.1-8b-instant',
+        messages,
+        max_tokens: maxTokens,
+        temperature: 0.5,
+      }),
+    });
+
+    if (res.status === 429) {
+      const retryAfterHeader = res.headers.get('retry-after');
+      const waitMs = retryAfterHeader ? (parseFloat(retryAfterHeader) * 1000) : backoffSchedule[Math.min(attempt, backoffSchedule.length - 1)];
+      attempt++;
+      if (onWaiting) onWaiting(Math.ceil(waitMs / 1000));
+      await sleepMs(waitMs);
+      continue; // retry the same request, doesn't count as a new lesson
+    }
+
+    if (!res.ok) {
+      const errBody = await res.text();
+      throw new Error(`Groq API error (${res.status}): ${errBody.slice(0, 200)}`);
+    }
+
+    return res.json();
+  }
 }
 
 async function loadQuizGroqKey() {
@@ -1098,20 +1161,31 @@ async function loadQuizStatus(courseId) {
   const statusText = document.getElementById('quizStatusText');
   const preview = document.getElementById('quizPreview');
   const btn = document.getElementById('generateQuizBtn');
+  const lessonsSnap = await db.collection('courses').doc(courseId).collection('lessons').orderBy('order').get();
+  const totalLessons = lessonsSnap.size;
+
   if (snap.exists && snap.data().questions && snap.data().questions.length > 0) {
     const q = snap.data();
+    const doneLessons = q.lessonsCovered ? q.lessonsCovered.length : 0;
     const generatedDate = q.generatedAt ? new Date(q.generatedAt).toLocaleDateString() : 'unknown date';
-    statusText.textContent = `✅ Quiz ready — ${q.questions.length} questions, generated ${generatedDate}.`;
+
     preview.style.display = 'block';
     preview.innerHTML = q.questions.map((qq, i) => `
       <div class="lesson-item"><div class="t">${i + 1}. ${qq.question}</div></div>
     `).join('');
-    btn.textContent = 'Regenerate Quiz (overwrites current one)';
+
+    if (q.isComplete) {
+      statusText.textContent = `✅ Quiz complete — ${q.questions.length} questions from all ${totalLessons} lessons, generated ${generatedDate}.`;
+      btn.textContent = 'Regenerate Quiz (starts over from lesson 1)';
+    } else {
+      statusText.textContent = `⏸ Partially done — ${q.questions.length} questions from ${doneLessons}/${totalLessons} lessons. Click to continue.`;
+      btn.textContent = `Continue Generating (lesson ${doneLessons + 1} of ${totalLessons})`;
+    }
   } else {
-    statusText.textContent = 'No quiz generated yet for this course.';
+    statusText.textContent = `No quiz generated yet — ${totalLessons} lesson(s) in this course.`;
     preview.style.display = 'none';
     preview.innerHTML = '';
-    btn.textContent = 'Generate Quiz (reads all lessons via AI)';
+    btn.textContent = 'Generate Quiz (small request per lesson)';
   }
 }
 
@@ -1119,6 +1193,7 @@ async function generateQuizForCourse() {
   if (!selectedCourseId) return;
   const btn = document.getElementById('generateQuizBtn');
   const statusText = document.getElementById('quizStatusText');
+  quizGenerationCancelled = false;
 
   const keySnap = await db.collection('config').doc('quizGenerator').get();
   const groqKey = keySnap.exists ? keySnap.data().groqApiKey : '';
@@ -1129,19 +1204,65 @@ async function generateQuizForCourse() {
   if (lessons.length === 0) { showToast('This course has no lessons yet'); return; }
 
   const courseTitle = document.getElementById('quizCourseTitle').textContent;
-  const lessonsText = lessons.map(l => `Lesson: ${l.title}\n${l.contentText || ''}`).join('\n\n').slice(0, 12000);
+
+  // Resume from existing progress instead of starting over. If the admin
+  // clicked "Regenerate" on an already-complete quiz, existingDoc.isComplete
+  // will be true — in that case we intentionally restart clean (covered by
+  // the confirm dialog in the regenerate button label).
+  const existingSnap = await db.collection('courses').doc(selectedCourseId).collection('quiz').doc('generated').get();
+  const existingDoc = existingSnap.exists ? existingSnap.data() : null;
+  const startOver = existingDoc && existingDoc.isComplete;
+
+  let allQuestions = (existingDoc && !startOver) ? [...existingDoc.questions] : [];
+  let lessonsCovered = (existingDoc && !startOver) ? [...existingDoc.lessonsCovered] : [];
+
+  if (startOver) {
+    const confirmRestart = confirm('This course already has a complete quiz. Regenerate from scratch? This replaces all existing questions.');
+    if (!confirmRestart) return;
+    allQuestions = [];
+    lessonsCovered = [];
+  }
+
+  const remainingLessons = lessons.filter(l => !lessonsCovered.includes(l.title));
+  if (remainingLessons.length === 0) {
+    showToast('All lessons are already covered');
+    return;
+  }
 
   btn.disabled = true;
-  btn.textContent = 'Generating... (AI is reading all lessons, ~20-40s)';
-  statusText.textContent = 'Please wait, do not close this page.';
+  const cancelBtn = document.getElementById('cancelQuizGenBtn');
+  if (cancelBtn) cancelBtn.style.display = 'inline-block';
 
-  try {
-    const prompt = `You are creating a course-completion quiz for a trading education app.
+  for (let i = 0; i < remainingLessons.length; i++) {
+    if (quizGenerationCancelled) {
+      statusText.textContent = `Paused — ${allQuestions.length} questions saved so far. Click "Continue Generating" to resume anytime.`;
+      break;
+    }
+
+    const lesson = remainingLessons[i];
+    const lessonProgress = lessonsCovered.length + 1;
+    btn.textContent = `Generating... lesson ${lessonProgress}/${lessons.length}: "${lesson.title}"`;
+    statusText.textContent = `Reading "${lesson.title}" and writing 1-2 questions from it...`;
+
+    // Small, focused prompt: ONE lesson's text, asking for only 1-2
+    // questions. This is the key change from before — a single 12,000-char
+    // "whole course" prompt became N tiny per-lesson prompts, each using a
+    // fraction of the tokens, which is both cheaper and far less likely to
+    // trip a rate limit in the first place.
+    const existingQuestionsList = allQuestions.map(q => `- ${q.question}`).join('\n') || '(none yet)';
+    const lessonText = (lesson.contentText || '').slice(0, 3000);
+
+    const prompt = `You are creating quiz questions for one lesson in a trading education course.
 Course: "${courseTitle}"
+Lesson: "${lesson.title}"
 
-Below is the full content of every lesson in this course. Read it carefully and write EXACTLY 8 multiple-choice questions that test real understanding of the material (not trivia about wording). Cover different lessons — don't cluster all questions on one topic.
+Lesson content:
+${lessonText}
 
-Each question needs exactly 4 options, one correct answer, and a one-sentence explanation of why it's correct. Provide BOTH an English version and an Urdu (real Urdu script, not Roman) version of the question, options, and explanation.
+Write EXACTLY 1 or 2 multiple-choice questions testing understanding of THIS lesson specifically. Do not repeat or rephrase any of these already-used questions from other lessons in this course:
+${existingQuestionsList}
+
+Each question needs exactly 4 options, one correct answer, and a one-sentence explanation. Provide BOTH English and real Urdu script (not Roman Urdu) for question, options, and explanation.
 
 Respond with ONLY a raw JSON array (no markdown fences, no preamble), in exactly this shape:
 [
@@ -1154,53 +1275,59 @@ Respond with ONLY a raw JSON array (no markdown fences, no preamble), in exactly
     "explanation": "Why this is correct, one sentence.",
     "explanationUrdu": "یہ کیوں درست ہے، ایک جملہ۔"
   }
-]
+]`;
 
-LESSON CONTENT:
-${lessonsText}`;
-
-    const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${groqKey}` },
-      body: JSON.stringify({
-        model: 'llama-3.1-8b-instant',
-        messages: [
+    try {
+      const data = await callGroqWithRetry(
+        groqKey,
+        [
           { role: 'system', content: 'You output only valid raw JSON, never markdown code fences or commentary.' },
           { role: 'user', content: prompt },
         ],
-        max_tokens: 4000,
-        temperature: 0.5,
-      }),
-    });
+        800, // small max_tokens — this is a 1-2 question request, not a whole quiz
+        (waitSeconds) => {
+          statusText.textContent = `Rate limit hit — waiting ${waitSeconds}s before retrying (progress already saved, safe to leave this open)...`;
+        }
+      );
 
-    if (!res.ok) {
-      const errBody = await res.text();
-      throw new Error(`Groq API error (${res.status}): ${errBody.slice(0, 200)}`);
+      let raw = data.choices[0].message.content.trim();
+      raw = raw.replace(/^```json/, '').replace(/^```/, '').replace(/```$/, '').trim();
+      const newQuestions = JSON.parse(raw);
+
+      if (Array.isArray(newQuestions) && newQuestions.length > 0) {
+        allQuestions = allQuestions.concat(newQuestions);
+      }
+      lessonsCovered.push(lesson.title);
+
+      // Save progress after EVERY lesson, not just at the end — this is
+      // what makes pause/resume and rate-limit-survival possible. Worst
+      // case if something crashes: you lose at most one lesson's questions.
+      await db.collection('courses').doc(selectedCourseId).collection('quiz').doc('generated').set({
+        courseId: selectedCourseId,
+        questions: allQuestions,
+        lessonsCovered,
+        isComplete: lessonsCovered.length >= lessons.length,
+        generatedAt: Date.now(),
+      });
+
+      loadQuizStatus(selectedCourseId);
+    } catch (e) {
+      if (e.message === 'CANCELLED') {
+        statusText.textContent = `Paused — ${allQuestions.length} questions saved so far. Click "Continue Generating" to resume anytime.`;
+      } else {
+        showToast('Error on "' + lesson.title + '": ' + e.message);
+        statusText.textContent = `Stopped on "${lesson.title}" — ${allQuestions.length} questions saved so far. Click "Continue Generating" to retry this lesson.`;
+      }
+      break;
     }
-
-    const data = await res.json();
-    let raw = data.choices[0].message.content.trim();
-    raw = raw.replace(/^```json/, '').replace(/^```/, '').replace(/```$/, '').trim();
-    const questions = JSON.parse(raw);
-
-    if (!Array.isArray(questions) || questions.length === 0) {
-      throw new Error('AI did not return any valid questions');
-    }
-
-    await db.collection('courses').doc(selectedCourseId).collection('quiz').doc('generated').set({
-      courseId: selectedCourseId,
-      questions,
-      generatedAt: Date.now(),
-    });
-
-    showToast(`Quiz generated: ${questions.length} questions`);
-    loadQuizStatus(selectedCourseId);
-  } catch (e) {
-    showToast('Quiz generation failed: ' + e.message);
-    statusText.textContent = 'Generation failed — see toast message. Try again.';
-  } finally {
-    btn.disabled = false;
   }
+
+  btn.disabled = false;
+  if (cancelBtn) cancelBtn.style.display = 'none';
+  if (!quizGenerationCancelled && lessonsCovered.length >= lessons.length) {
+    showToast(`Quiz complete: ${allQuestions.length} questions across ${lessons.length} lessons`);
+  }
+  loadQuizStatus(selectedCourseId);
 }
 
 async function saveLesson() {
