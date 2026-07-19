@@ -72,8 +72,17 @@ class ScreenCaptureService : Service() {
             val manager = getSystemService(MediaProjectionManager::class.java)
             mediaProjection = manager.getMediaProjection(resultCode, data)
             mediaProjection?.registerCallback(projectionCallback, handler)
-            setUpVirtualDisplay()
-            isActive.value = true
+            try {
+                setUpVirtualDisplay()
+                isActive.value = true
+            } catch (e: Exception) {
+                // Capture setup failed (e.g. device-specific display quirk) —
+                // don't leave a half-initialized, permanently-stuck session.
+                mediaProjection?.stop()
+                mediaProjection = null
+                isActive.value = false
+                stopSelf()
+            }
         }
         return START_STICKY
     }
@@ -81,14 +90,22 @@ class ScreenCaptureService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     private fun setUpVirtualDisplay() {
-        val metrics = DisplayMetrics()
-        val windowManager = getSystemService(WINDOW_SERVICE) as android.view.WindowManager
-        @Suppress("DEPRECATION")
-        windowManager.defaultDisplay.getRealMetrics(metrics)
-
+        // NOTE: windowManager.defaultDisplay.getRealMetrics() is unreliable when
+        // called from a plain Service (it isn't tied to a specific Display on
+        // some devices/OS versions and can silently return wrong/zero values,
+        // which was causing the analyzer to sit forever waiting for a frame
+        // that never arrives). resources.displayMetrics is the reliable source.
+        val metrics = resources.displayMetrics
         val width = metrics.widthPixels
         val height = metrics.heightPixels
         val density = metrics.densityDpi
+
+        if (width <= 0 || height <= 0) {
+            // Can't safely create a capture surface — bail out cleanly instead
+            // of leaving a dead/zero-size ImageReader that never fires.
+            stopSelf()
+            return
+        }
 
         imageReader = ImageReader.newInstance(width, height, PixelFormat.RGBA_8888, 2)
 
@@ -139,7 +156,11 @@ class ScreenCaptureService : Service() {
             .setSmallIcon(R.mipmap.ic_launcher)
             .setPriority(NotificationCompat.PRIORITY_MIN)
             .build()
-        startForeground(NOTIF_ID, notification)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            startForeground(NOTIF_ID, notification, android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION)
+        } else {
+            startForeground(NOTIF_ID, notification)
+        }
     }
 
     override fun onDestroy() {

@@ -273,8 +273,8 @@ class OverlayBubbleService : Service() {
         signalLabel.text = "  Reading screen…"
         CoroutineScope(Dispatchers.Default).launch {
             var frame: Bitmap? = null
-            repeat(15) {
-                delay(200)
+            repeat(20) {
+                delay(250)
                 frame = ScreenCaptureService.latestFrame
                 if (frame != null) return@repeat
             }

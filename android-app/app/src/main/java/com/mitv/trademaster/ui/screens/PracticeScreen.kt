@@ -480,11 +480,11 @@ private fun LiveCandleChart(candles: List<DemoCandle>, formingCandle: DemoCandle
                         drawPath(path, color = markerColor)
                         drawContext.canvas.nativeCanvas.drawText(
                             "WIN", xCenter, ay - 6f,
-                            android.graphics.Paint().apply {
-                                color = android.graphics.Color.rgb(52, 227, 154)
-                                textSize = 22f
-                                textAlign = android.graphics.Paint.Align.CENTER
-                                isFakeBoldText = true
+                            android.graphics.Paint().also { winPaint ->
+                                winPaint.color = android.graphics.Color.rgb(52, 227, 154)
+                                winPaint.textSize = 22f
+                                winPaint.textAlign = android.graphics.Paint.Align.CENTER
+                                winPaint.isFakeBoldText = true
                             }
                         )
                     } else {
@@ -499,11 +499,11 @@ private fun LiveCandleChart(candles: List<DemoCandle>, formingCandle: DemoCandle
                         drawPath(path, color = markerColor)
                         drawContext.canvas.nativeCanvas.drawText(
                             "LOSS", xCenter, ay + 20f,
-                            android.graphics.Paint().apply {
-                                color = android.graphics.Color.rgb(255, 92, 106)
-                                textSize = 22f
-                                textAlign = android.graphics.Paint.Align.CENTER
-                                isFakeBoldText = true
+                            android.graphics.Paint().also { lossPaint ->
+                                lossPaint.color = android.graphics.Color.rgb(255, 92, 106)
+                                lossPaint.textSize = 22f
+                                lossPaint.textAlign = android.graphics.Paint.Align.CENTER
+                                lossPaint.isFakeBoldText = true
                             }
                         )
                     }
