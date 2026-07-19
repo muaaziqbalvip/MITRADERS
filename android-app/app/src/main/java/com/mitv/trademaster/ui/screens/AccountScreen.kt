@@ -39,6 +39,7 @@ fun AccountScreen(language: String, onSignedOut: () -> Unit) {
     val authRepo = remember { AuthRepository(context) }
     val firestoreRepo = remember { FirestoreRepository() }
     val scope = rememberCoroutineScope()
+    val tapFeedback = com.mitv.trademaster.util.rememberTapFeedback()
 
     var profile by remember { mutableStateOf<StudentProfile?>(null) }
     var isLoading by remember { mutableStateOf(true) }
@@ -162,6 +163,7 @@ fun AccountScreen(language: String, onSignedOut: () -> Unit) {
 
             Button(
                 onClick = {
+                    tapFeedback()
                     val uid = authRepo.currentUser?.uid ?: return@Button
                     val current = profile ?: return@Button
                     isSaving = true
@@ -203,7 +205,7 @@ fun AccountScreen(language: String, onSignedOut: () -> Unit) {
 
         if (!isEditing) {
             Button(
-                onClick = { showConfirmSignOut = true },
+                onClick = { tapFeedback(); showConfirmSignOut = true },
                 colors = ButtonDefaults.buttonColors(containerColor = BrandRed.copy(alpha = 0.12f), contentColor = BrandRed),
                 shape = RoundedCornerShape(12.dp),
                 modifier = Modifier.fillMaxWidth()
@@ -227,13 +229,14 @@ fun AccountScreen(language: String, onSignedOut: () -> Unit) {
             text = { Text(if (language == "ur") "آپ کو دوبارہ لاگ ان کرنا ہوگا۔" else "You'll need to sign in again next time.", color = BrandSilverDim, fontSize = 13.sp) },
             confirmButton = {
                 TextButton(onClick = {
+                    tapFeedback()
                     authRepo.signOut()
                     showConfirmSignOut = false
                     onSignedOut()
                 }) { Text(if (language == "ur") "سائن آؤٹ" else "Sign Out", color = BrandRed) }
             },
             dismissButton = {
-                TextButton(onClick = { showConfirmSignOut = false }) { Text(if (language == "ur") "منسوخ" else "Cancel", color = BrandSilverDim) }
+                TextButton(onClick = { tapFeedback(); showConfirmSignOut = false }) { Text(if (language == "ur") "منسوخ" else "Cancel", color = BrandSilverDim) }
             }
         )
     }

@@ -409,12 +409,28 @@
 
     <!-- ============ SETTINGS / CONFIG ============ -->
     <section class="page" id="page-config">
-      <div class="section-title">Payment QR Code</div>
+      <div class="section-title">JazzCash Payment</div>
       <div class="card">
-        <p style="font-size:11.5px; color:var(--silver-dim); margin:0 0 12px;">Students see this on the payment screen.</p>
-        <input type="file" id="qrFileInput" accept="image/*" />
-        <div><img id="qrPreview" class="qr-preview" style="display:none;" onclick="openImgZoom(this.src)" /></div>
-        <button class="block" style="margin-top:14px;" onclick="uploadQrCode()">Upload & Save QR</button>
+        <p style="font-size:11.5px; color:var(--silver-dim); margin:0 0 12px;">Students see this QR when they pick JazzCash on the payment screen.</p>
+        <input type="file" id="jazzCashFileInput" accept="image/*" />
+        <div><img id="jazzCashPreview" class="qr-preview" style="display:none;" onclick="openImgZoom(this.src)" /></div>
+        <button class="block" style="margin-top:14px;" onclick="uploadQrCode('jazzcash')">Upload & Save JazzCash QR</button>
+        <div class="field" style="margin-top:12px;">
+          <label>JazzCash Number (shown under QR)</label>
+          <input id="configJazzCashNumber" placeholder="03062015326" inputmode="tel" />
+        </div>
+      </div>
+
+      <div class="section-title">EasyPaisa Payment</div>
+      <div class="card">
+        <p style="font-size:11.5px; color:var(--silver-dim); margin:0 0 12px;">Students see this QR when they pick EasyPaisa on the payment screen.</p>
+        <input type="file" id="easyPaisaFileInput" accept="image/*" />
+        <div><img id="easyPaisaPreview" class="qr-preview" style="display:none;" onclick="openImgZoom(this.src)" /></div>
+        <button class="block" style="margin-top:14px;" onclick="uploadQrCode('easypaisa')">Upload & Save EasyPaisa QR</button>
+        <div class="field" style="margin-top:12px;">
+          <label>EasyPaisa Number (shown under QR)</label>
+          <input id="configEasyPaisaNumber" placeholder="03001234567" inputmode="tel" />
+        </div>
       </div>
 
       <div class="section-title">App Settings</div>
@@ -428,7 +444,7 @@
           <input id="configWhatsapp" placeholder="923062015326" inputmode="tel" />
         </div>
         <div class="field">
-          <label>Groq API Key (support chat)</label>
+          <label>Groq API Key (support chat + AI quiz generator)</label>
           <input id="configGroqKey" placeholder="gsk_..." type="password" />
         </div>
         <button class="block" onclick="saveConfig()">Save Settings</button>
@@ -1220,9 +1236,18 @@ async function loadConfig() {
   document.getElementById('configPrice').value = c.subscriptionPricePkr || 500;
   document.getElementById('configWhatsapp').value = c.whatsappNumber || '923062015326';
   document.getElementById('configGroqKey').value = c.groqApiKey || '';
-  if (c.paymentQrUrl) {
-    const preview = document.getElementById('qrPreview');
-    preview.src = c.paymentQrUrl;
+  document.getElementById('configJazzCashNumber').value = c.jazzCashNumber || '';
+  document.getElementById('configEasyPaisaNumber').value = c.easyPaisaNumber || '';
+
+  const jazzCashUrl = c.jazzCashQrUrl || c.paymentQrUrl; // fall back to legacy single-QR field
+  if (jazzCashUrl) {
+    const preview = document.getElementById('jazzCashPreview');
+    preview.src = jazzCashUrl;
+    preview.style.display = 'block';
+  }
+  if (c.easyPaisaQrUrl) {
+    const preview = document.getElementById('easyPaisaPreview');
+    preview.src = c.easyPaisaQrUrl;
     preview.style.display = 'block';
   }
 }
@@ -1232,12 +1257,18 @@ async function saveConfig() {
     subscriptionPricePkr: parseInt(document.getElementById('configPrice').value || '500'),
     whatsappNumber: document.getElementById('configWhatsapp').value,
     groqApiKey: document.getElementById('configGroqKey').value,
+    jazzCashNumber: document.getElementById('configJazzCashNumber').value,
+    easyPaisaNumber: document.getElementById('configEasyPaisaNumber').value,
   }, { merge: true });
   showToast('Settings saved');
 }
 
-async function uploadQrCode() {
-  const fileInput = document.getElementById('qrFileInput');
+async function uploadQrCode(method) {
+  const fileInputId = method === 'jazzcash' ? 'jazzCashFileInput' : 'easyPaisaFileInput';
+  const previewId = method === 'jazzcash' ? 'jazzCashPreview' : 'easyPaisaPreview';
+  const firestoreField = method === 'jazzcash' ? 'jazzCashQrUrl' : 'easyPaisaQrUrl';
+
+  const fileInput = document.getElementById(fileInputId);
   if (!fileInput.files[0]) { showToast('Select an image first'); return; }
   const file = fileInput.files[0];
   const reader = new FileReader();
@@ -1250,11 +1281,11 @@ async function uploadQrCode() {
       const res = await fetch('https://api.imgbb.com/1/upload', { method: 'POST', body: formData });
       const data = await res.json();
       if (data.success) {
-        await db.collection('config').doc('app').set({ paymentQrUrl: data.data.url }, { merge: true });
-        const preview = document.getElementById('qrPreview');
+        await db.collection('config').doc('app').set({ [firestoreField]: data.data.url }, { merge: true });
+        const preview = document.getElementById(previewId);
         preview.src = data.data.url;
         preview.style.display = 'block';
-        showToast('QR code uploaded and saved');
+        showToast((method === 'jazzcash' ? 'JazzCash' : 'EasyPaisa') + ' QR uploaded and saved');
       } else {
         showToast('Upload failed');
       }

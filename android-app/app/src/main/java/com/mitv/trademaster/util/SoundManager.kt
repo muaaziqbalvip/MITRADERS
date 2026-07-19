@@ -49,3 +49,18 @@ fun rememberTapFeedback(): () -> Unit {
         haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
     }
 }
+
+/**
+ * Wraps any onClick lambda so it fires the tap sound + haptic first, then
+ * runs the original action. Use this to retrofit tap feedback onto existing
+ * Button/clickable onClick lambdas with a single-line change:
+ *   onClick = withTapFeedback { doTheThing() }
+ */
+@Composable
+fun withTapFeedback(action: () -> Unit): () -> Unit {
+    val tapFeedback = rememberTapFeedback()
+    return {
+        tapFeedback()
+        action()
+    }
+}

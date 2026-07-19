@@ -19,6 +19,7 @@ data class SessionState(
     val lastLessonByCourse: Map<String, String> = emptyMap(),
     val religionAsked: Boolean = false,
     val isMuslim: Boolean = false,
+    val quizPassedCourseIds: Set<String> = emptySet(),
 )
 
 class SessionRepository(private val context: Context) {
@@ -31,6 +32,7 @@ class SessionRepository(private val context: Context) {
         val LAST_LESSON_MAP = stringPreferencesKey("last_lesson_map") // "courseId:lessonId,courseId2:lessonId2"
         val RELIGION_ASKED = booleanPreferencesKey("religion_asked")
         val IS_MUSLIM = booleanPreferencesKey("is_muslim")
+        val QUIZ_PASSED_COURSES = stringSetPreferencesKey("quiz_passed_courses")
     }
 
     val session: Flow<SessionState> = context.sessionStore.data.map { prefs ->
@@ -45,6 +47,7 @@ class SessionRepository(private val context: Context) {
             lastLessonByCourse = lastLessonMap,
             religionAsked = prefs[Keys.RELIGION_ASKED] ?: false,
             isMuslim = prefs[Keys.IS_MUSLIM] ?: false,
+            quizPassedCourseIds = prefs[Keys.QUIZ_PASSED_COURSES] ?: emptySet(),
         )
     }
 
@@ -90,6 +93,14 @@ class SessionRepository(private val context: Context) {
                 .toMutableMap()
             map[courseId] = lessonId
             prefs[Keys.LAST_LESSON_MAP] = map.entries.joinToString(",") { "${it.key}:${it.value}" }
+        }
+    }
+
+    /** Marks a course's quiz as passed — this is what unlocks the next course. */
+    suspend fun markQuizPassed(courseId: String) {
+        context.sessionStore.edit { prefs ->
+            val current = prefs[Keys.QUIZ_PASSED_COURSES] ?: emptySet()
+            prefs[Keys.QUIZ_PASSED_COURSES] = current + courseId
         }
     }
 }

@@ -38,6 +38,7 @@ fun ProfileSetupScreen(onComplete: () -> Unit) {
     val authRepo = remember { AuthRepository(context) }
     val firestoreRepo = remember { FirestoreRepository() }
     val scope = rememberCoroutineScope()
+    val tapFeedback = com.mitv.trademaster.util.rememberTapFeedback()
 
     var studentName by remember { mutableStateOf("") }
     var fatherName by remember { mutableStateOf("") }
@@ -123,6 +124,7 @@ fun ProfileSetupScreen(onComplete: () -> Unit) {
 
         Button(
             onClick = {
+                tapFeedback()
                 if (studentName.isBlank() || fatherName.isBlank()) {
                     errorMsg = "Please fill in at least your name and father's name"
                     return@Button

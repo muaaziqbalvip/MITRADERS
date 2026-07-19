@@ -42,6 +42,7 @@ fun AnalyzerScreen(language: String = "en") {
     val authRepo = remember { AuthRepository(context) }
     val firestoreRepo = remember { FirestoreRepository() }
     val scope = rememberCoroutineScope()
+    val tapFeedback = com.mitv.trademaster.util.rememberTapFeedback()
 
     var imageUri by remember { mutableStateOf<Uri?>(null) }
     var isAnalyzing by remember { mutableStateOf(false) }
@@ -99,6 +100,7 @@ fun AnalyzerScreen(language: String = "en") {
 
             Button(
                 onClick = {
+                    tapFeedback()
                     if (imageUri == null) return@Button
                     errorMsg = null
                     isAnalyzing = true

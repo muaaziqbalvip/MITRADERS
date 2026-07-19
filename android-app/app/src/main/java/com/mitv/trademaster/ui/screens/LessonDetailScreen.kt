@@ -41,7 +41,7 @@ import kotlinx.coroutines.launch
  * off" card), that lesson opens first instead of lesson #1.
  */
 @Composable
-fun LessonDetailScreen(course: Course, language: String, onBack: () -> Unit, resumeLessonId: String? = null) {
+fun LessonDetailScreen(course: Course, language: String, onBack: () -> Unit, resumeLessonId: String? = null, onAllLessonsComplete: () -> Unit = {}) {
     val context = LocalContext.current
     val repo = remember { FirestoreRepository() }
     val authRepo = remember { AuthRepository(context) }
@@ -54,6 +54,7 @@ fun LessonDetailScreen(course: Course, language: String, onBack: () -> Unit, res
     var showLessonList by remember { mutableStateOf(false) }
     var justCompleted by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
+    val tapFeedback = com.mitv.trademaster.util.rememberTapFeedback()
 
     LaunchedEffect(course.id) {
         var hasSetInitialLesson = false
@@ -231,6 +232,13 @@ fun LessonDetailScreen(course: Course, language: String, onBack: () -> Unit, res
                                     repo.incrementLessonsCompleted(uid)
                                     justCompleted = true
                                     soundManager.playSuccess()
+                                    // If this was the last remaining lesson in the course,
+                                    // move straight to the course quiz instead of leaving
+                                    // the student stuck on a "completed" screen with nowhere to go.
+                                    val nowCompletedCount = completedCount + 1
+                                    if (nowCompletedCount >= lessons.size) {
+                                        onAllLessonsComplete()
+                                    }
                                 }
                             }
                         },

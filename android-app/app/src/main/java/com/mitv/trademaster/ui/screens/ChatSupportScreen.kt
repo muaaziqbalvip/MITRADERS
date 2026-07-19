@@ -46,6 +46,7 @@ fun ChatSupportScreen(language: String = "en") {
     val firestoreRepo = remember { FirestoreRepository() }
     val configRepo = remember { RemoteConfigRepository() }
     val scope = rememberCoroutineScope()
+    val tapFeedback = com.mitv.trademaster.util.rememberTapFeedback()
     val listState = rememberLazyListState()
 
     val uid = authRepo.currentUser?.uid ?: ""
@@ -199,7 +200,7 @@ fun ChatSupportScreen(language: String = "en") {
             )
             Spacer(Modifier.width(8.dp))
             IconButton(
-                onClick = { sendMessage() },
+                onClick = { tapFeedback(); sendMessage() },
                 enabled = !isSending,
                 modifier = Modifier.background(BrandGreen, RoundedCornerShape(50)).size(44.dp)
             ) {

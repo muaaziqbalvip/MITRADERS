@@ -107,6 +107,23 @@ class FirestoreRepository {
     }
 
     // ------------------------------------------------------------------
+    // Course quiz (AI-generated via Groq, cached per course)
+    // ------------------------------------------------------------------
+
+    /** Cached quiz for a course, if one has already been generated. Null if not generated yet. */
+    suspend fun getCourseQuiz(courseId: String): com.mitv.trademaster.data.model.CourseQuiz? {
+        val snap = db.collection("courses").document(courseId)
+            .collection("quiz").document("generated").get().await()
+        return if (snap.exists()) snap.toObject<com.mitv.trademaster.data.model.CourseQuiz>() else null
+    }
+
+    /** Saves a freshly-generated quiz so future students reuse it instead of re-calling Groq. */
+    suspend fun saveCourseQuiz(quiz: com.mitv.trademaster.data.model.CourseQuiz) {
+        db.collection("courses").document(quiz.courseId)
+            .collection("quiz").document("generated").set(quiz).await()
+    }
+
+    // ------------------------------------------------------------------
     // Announcements (admin-authored, shown on Home screen)
     // ------------------------------------------------------------------
 

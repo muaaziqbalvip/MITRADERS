@@ -39,6 +39,7 @@ fun LoginScreen(onAuthenticated: () -> Unit) {
     val activity = context as? android.app.Activity
     val authRepo = remember { AuthRepository(context) }
     val scope = rememberCoroutineScope()
+    val tapFeedback = com.mitv.trademaster.util.rememberTapFeedback()
 
     var mode by remember { mutableStateOf(AuthMode.SIGN_IN) }
     var email by remember { mutableStateOf("") }
@@ -96,7 +97,7 @@ fun LoginScreen(onAuthenticated: () -> Unit) {
             listOf(AuthMode.SIGN_IN to "Sign In", AuthMode.SIGN_UP to "Sign Up", AuthMode.PHONE to "Phone").forEach { (m, label) ->
                 val selected = mode == m
                 TextButton(
-                    onClick = { mode = m; errorMsg = null },
+                    onClick = { tapFeedback(); mode = m; errorMsg = null },
                     modifier = Modifier.weight(1f)
                 ) {
                     Text(label, color = if (selected) BrandGreen else BrandSilverDim, fontSize = 12.sp)
@@ -115,6 +116,7 @@ fun LoginScreen(onAuthenticated: () -> Unit) {
 
                 Button(
                     onClick = {
+                        tapFeedback()
                         errorMsg = null
                         if (email.isBlank() || password.isBlank()) { errorMsg = "Please fill all fields"; return@Button }
                         isLoading = true
@@ -140,6 +142,7 @@ fun LoginScreen(onAuthenticated: () -> Unit) {
                     Spacer(Modifier.height(20.dp))
                     Button(
                         onClick = {
+                            tapFeedback()
                             errorMsg = null
                             if (phone.isBlank() || activity == null) { errorMsg = "Enter a valid phone number"; return@Button }
                             isLoading = true
@@ -164,6 +167,7 @@ fun LoginScreen(onAuthenticated: () -> Unit) {
                     Spacer(Modifier.height(20.dp))
                     Button(
                         onClick = {
+                            tapFeedback()
                             errorMsg = null
                             isLoading = true
                             scope.launch {

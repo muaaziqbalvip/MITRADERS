@@ -35,6 +35,7 @@ private val tabs = listOf(Tab.Home, Tab.Analyzer, Tab.Learn, Tab.Practice, Tab.M
 fun MainShellScreen(language: String, onLanguageChanged: (String) -> Unit, onSignedOut: () -> Unit, initialDeepLink: String? = null) {
     val navController = rememberNavController()
     var selectedCourse by remember { mutableStateOf<Course?>(null) }
+    var showQuizForCourse by remember { mutableStateOf<Course?>(null) }
     val tapFeedback = com.mitv.trademaster.util.rememberTapFeedback()
     var pendingResumeLessonId by remember { mutableStateOf<String?>(null) }
     var showMoreSheet by remember { mutableStateOf(false) }
@@ -123,14 +124,23 @@ fun MainShellScreen(language: String, onLanguageChanged: (String) -> Unit, onSig
                     }
                     composable(Tab.Analyzer.route) { AnalyzerScreen(language) }
                     composable(Tab.Learn.route) {
-                        if (selectedCourse == null) {
-                            CoursesScreen(language) { course -> selectedCourse = course }
+                        val course = showQuizForCourse
+                        if (course != null) {
+                            QuizScreen(
+                                course = course,
+                                language = language,
+                                onBack = { showQuizForCourse = null },
+                                onPassed = { showQuizForCourse = null }
+                            )
+                        } else if (selectedCourse == null) {
+                            CoursesScreen(language) { course2 -> selectedCourse = course2 }
                         } else {
                             LessonDetailScreen(
                                 course = selectedCourse!!,
                                 language = language,
                                 onBack = { selectedCourse = null; pendingResumeLessonId = null },
-                                resumeLessonId = pendingResumeLessonId
+                                resumeLessonId = pendingResumeLessonId,
+                                onAllLessonsComplete = { showQuizForCourse = selectedCourse }
                             )
                         }
                     }

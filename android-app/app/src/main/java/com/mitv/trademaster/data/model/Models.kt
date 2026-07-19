@@ -90,3 +90,24 @@ data class PracticeTrade(
     val outcome: String = "",           // win | loss | pending
     val timestamp: Long = 0L,
 )
+
+data class QuizQuestion(
+    val question: String = "",
+    val questionUrdu: String = "",
+    val options: List<String> = emptyList(),
+    val optionsUrdu: List<String> = emptyList(),
+    val correctIndex: Int = 0,
+    val explanation: String = "",
+    val explanationUrdu: String = "",
+)
+
+/**
+ * A generated quiz for one course, cached at courses/{courseId}/quiz/generated
+ * so the Groq call only happens once per course (first student to finish
+ * triggers generation; everyone after reuses the saved copy).
+ */
+data class CourseQuiz(
+    val courseId: String = "",
+    val questions: List<QuizQuestion> = emptyList(),
+    val generatedAt: Long = 0L,
+)

@@ -88,6 +88,7 @@ fun IslamicScreen(language: String) {
     val sessionRepo = remember { SessionRepository(context) }
     val session by sessionRepo.session.collectAsState(initial = SessionState())
     val scope = rememberCoroutineScope()
+    val tapFeedback = com.mitv.trademaster.util.rememberTapFeedback()
 
     var showReligionPrompt by remember { mutableStateOf(false) }
 

@@ -15,6 +15,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -29,6 +30,9 @@ import com.mitv.trademaster.data.SessionState
 import com.mitv.trademaster.data.model.Course
 import com.mitv.trademaster.data.model.Lesson
 import com.mitv.trademaster.ui.theme.*
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 
 private val iconMap: Map<String, ImageVector> = mapOf(
@@ -59,14 +63,18 @@ fun CoursesScreen(language: String, onCourseSelected: (Course) -> Unit) {
     var lessonsByCourse by remember { mutableStateOf<Map<String, List<Lesson>>>(emptyMap()) }
     var isLoading by remember { mutableStateOf(true) }
     val scope = rememberCoroutineScope()
+    val tapFeedback = com.mitv.trademaster.util.rememberTapFeedback()
 
     LaunchedEffect(Unit) {
         repo.observeCourses().collect { loadedCourses ->
             courses = loadedCourses
-            // Pull lesson counts per course so we can show real progress bars.
-            val map = mutableMapOf<String, List<Lesson>>()
-            loadedCourses.forEach { c ->
-                map[c.id] = try { repo.getLessons(c.id) } catch (e: Exception) { emptyList() }
+            // Fetch every course's lessons in parallel instead of one-by-one —
+            // with N courses this was previously N sequential round-trips,
+            // now it's a single wave that finishes as fast as the slowest one.
+            val map = coroutineScope {
+                loadedCourses.map { c ->
+                    async { c.id to (try { repo.getLessons(c.id) } catch (e: Exception) { emptyList() }) }
+                }.awaitAll().toMap()
             }
             lessonsByCourse = map
             isLoading = false
@@ -153,26 +161,34 @@ fun CoursesScreen(language: String, onCourseSelected: (Course) -> Unit) {
                     )
                 }
             } else {
-                items(courses) { course ->
+                items(courses.sortedBy { it.order }) { course ->
+                    val courseIndex = courses.sortedBy { it.order }.indexOf(course)
                     val courseLessons = lessonsByCourse[course.id].orEmpty()
                     val completedInCourse = courseLessons.count { it.id in session.completedLessonIds }
                     val courseProgress = if (courseLessons.isNotEmpty()) completedInCourse.toFloat() / courseLessons.size else 0f
-                    val isDone = courseLessons.isNotEmpty() && completedInCourse == courseLessons.size
+                    val isDone = courseLessons.isNotEmpty() && completedInCourse == courseLessons.size && course.id in session.quizPassedCourseIds
                     val hasStarted = completedInCourse > 0 && !isDone
                     val accent = levelColor[course.level] ?: BrandGreen
+
+                    // A course is locked until the previous course's quiz has been passed.
+                    // The very first course is always unlocked.
+                    val previousCourse = courses.sortedBy { it.order }.getOrNull(courseIndex - 1)
+                    val isLocked = previousCourse != null && previousCourse.id !in session.quizPassedCourseIds
 
                     Card(
                         colors = CardDefaults.cardColors(containerColor = PanelDark),
                         shape = RoundedCornerShape(18.dp),
-                        modifier = Modifier.fillMaxWidth().clickable { onCourseSelected(course) }
+                        modifier = Modifier.fillMaxWidth().clickable(enabled = !isLocked) { tapFeedback(); onCourseSelected(course) }
                     ) {
-                        Column(Modifier.padding(16.dp)) {
+                        Column(Modifier.padding(16.dp).let { if (isLocked) it.alpha(0.5f) else it }) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Box(
                                     modifier = Modifier.size(50.dp).background(accent.copy(alpha = 0.14f), RoundedCornerShape(15.dp)),
                                     contentAlignment = Alignment.Center
                                 ) {
-                                    if (isDone) {
+                                    if (isLocked) {
+                                        Icon(Icons.Filled.Lock, contentDescription = null, tint = BrandSilverDim)
+                                    } else if (isDone) {
                                         Icon(Icons.Filled.WorkspacePremium, contentDescription = null, tint = accent, modifier = Modifier.size(26.dp))
                                     } else {
                                         Icon(iconMap[course.iconName] ?: Icons.Filled.School, contentDescription = null, tint = accent)
@@ -184,7 +200,11 @@ fun CoursesScreen(language: String, onCourseSelected: (Course) -> Unit) {
                                         if (language == "ur" && course.titleUrdu.isNotBlank()) course.titleUrdu else course.title,
                                         color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 15.sp
                                     )
-                                    Text(course.description, color = BrandSilverDim, fontSize = 11.sp, maxLines = 1)
+                                    Text(
+                                        if (isLocked) (if (language == "ur") "پچھلا کورس مکمل کریں اور کوئز پاس کریں" else "Complete previous course & pass its quiz")
+                                        else course.description,
+                                        color = BrandSilverDim, fontSize = 11.sp, maxLines = 1
+                                    )
                                 }
                                 Column(horizontalAlignment = Alignment.End) {
                                     Text(
@@ -210,7 +230,7 @@ fun CoursesScreen(language: String, onCourseSelected: (Course) -> Unit) {
                                 }
                             }
 
-                            if (courseLessons.isNotEmpty()) {
+                            if (courseLessons.isNotEmpty() && !isLocked) {
                                 Spacer(Modifier.height(14.dp))
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Box(

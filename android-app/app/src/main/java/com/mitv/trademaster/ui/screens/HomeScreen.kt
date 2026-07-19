@@ -56,6 +56,7 @@ fun HomeScreen(language: String, onContinueLesson: (Course, Lesson) -> Unit = { 
     val sessionRepo = remember { SessionRepository(context) }
     val session by sessionRepo.session.collectAsState(initial = SessionState())
     val scope = rememberCoroutineScope()
+    val tapFeedback = com.mitv.trademaster.util.rememberTapFeedback()
 
     var profile by remember { mutableStateOf<StudentProfile?>(null) }
     var announcements by remember { mutableStateOf<List<Announcement>>(emptyList()) }
@@ -125,7 +126,7 @@ fun HomeScreen(language: String, onContinueLesson: (Course, Lesson) -> Unit = { 
             Card(
                 colors = CardDefaults.cardColors(containerColor = Color.Transparent),
                 shape = RoundedCornerShape(18.dp),
-                modifier = Modifier.fillMaxWidth().clickable { onContinueLesson(continueCourse!!, continueLesson!!) }
+                modifier = Modifier.fillMaxWidth().clickable { tapFeedback(); onContinueLesson(continueCourse!!, continueLesson!!) }
             ) {
                 Box(
                     modifier = Modifier.fillMaxWidth()
@@ -187,6 +188,7 @@ fun HomeScreen(language: String, onContinueLesson: (Course, Lesson) -> Unit = { 
 
                 Button(
                     onClick = {
+                        tapFeedback()
                         if (!Settings.canDrawOverlays(context)) {
                             context.startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:${context.packageName}")))
                             return@Button
