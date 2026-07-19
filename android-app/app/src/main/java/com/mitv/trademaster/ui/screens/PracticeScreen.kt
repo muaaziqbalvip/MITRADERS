@@ -6,6 +6,8 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -20,6 +22,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -29,7 +32,11 @@ import kotlin.math.max
 import kotlin.math.min
 import kotlin.random.Random
 
-private data class DemoCandle(val open: Float, val close: Float, val high: Float, val low: Float, val forming: Boolean = false) {
+private data class DemoCandle(
+    val open: Float, val close: Float, val high: Float, val low: Float,
+    val forming: Boolean = false,
+    val tradeResult: Boolean? = null, // null = no trade placed on this candle; true = win; false = loss
+) {
     val isBullish get() = close >= open
     val bodySize get() = kotlin.math.abs(close - open)
 }
@@ -113,10 +120,10 @@ fun PracticeScreen(language: String) {
         // Candle closes — settle the trade.
         isSettling = true
         delay(500)
-        val final = DemoCandle(open, close, high, low)
         val guess = pendingGuess
-        if (guess != null) {
-            val correct = guess == final.isBullish
+        val correct = guess?.let { it == (close >= open) }
+        val final = DemoCandle(open, close, high, low, tradeResult = correct)
+        if (guess != null && correct != null) {
             if (correct) { wins++; balance += tradeAmount; soundManager.playSuccess() } else { losses++; balance -= tradeAmount; soundManager.playError() }
             lastExplanation = explainCandle(final, language)
         } else {
@@ -133,7 +140,7 @@ fun PracticeScreen(language: String) {
         }
     }
 
-    Column(modifier = Modifier.fillMaxSize().background(BgBlack).padding(20.dp)) {
+    Column(modifier = Modifier.fillMaxSize().background(BgBlack).verticalScroll(rememberScrollState()).padding(20.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
             Column(Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -407,7 +414,10 @@ private fun LiveCandleChart(candles: List<DemoCandle>, formingCandle: DemoCandle
         val range = max(maxV - minV, 0.01f)
 
         Canvas(modifier = Modifier.fillMaxSize()) {
-            fun yFor(v: Float) = size.height - ((v - minV) / range) * size.height
+            val topMargin = 32f
+            val bottomMargin = 32f
+            val usableHeight = size.height - topMargin - bottomMargin
+            fun yFor(v: Float) = topMargin + usableHeight - ((v - minV) / range) * usableHeight
 
             // Faint horizontal grid lines for readability, like a real chart.
             val gridLines = 4
@@ -452,6 +462,51 @@ private fun LiveCandleChart(candles: List<DemoCandle>, formingCandle: DemoCandle
                         topLeft = Offset(xCenter - candleWidthPx * 0.32f, bodyTop),
                         size = Size(candleWidthPx * 0.64f, bodyHeight)
                     )
+                }
+
+                // Win/Loss marker — shows exactly which candle a trade was placed on
+                // and how it resolved, right on the chart (not just in a text summary).
+                c.tradeResult?.let { won ->
+                    val markerColor = if (won) Color(0xFF34E39A) else Color(0xFFFF5C6A)
+                    if (won) {
+                        // Small upward arrow + "WIN" above the candle's high.
+                        val ay = yFor(c.high) - 22f
+                        val path = androidx.compose.ui.graphics.Path().apply {
+                            moveTo(xCenter, ay)
+                            lineTo(xCenter - 6f, ay + 10f)
+                            lineTo(xCenter + 6f, ay + 10f)
+                            close()
+                        }
+                        drawPath(path, color = markerColor)
+                        drawContext.canvas.nativeCanvas.drawText(
+                            "WIN", xCenter, ay - 6f,
+                            android.graphics.Paint().apply {
+                                color = android.graphics.Color.rgb(52, 227, 154)
+                                textSize = 22f
+                                textAlign = android.graphics.Paint.Align.CENTER
+                                isFakeBoldText = true
+                            }
+                        )
+                    } else {
+                        // Small downward arrow + "LOSS" below the candle's low.
+                        val ay = yFor(c.low) + 22f
+                        val path = androidx.compose.ui.graphics.Path().apply {
+                            moveTo(xCenter, ay)
+                            lineTo(xCenter - 6f, ay - 10f)
+                            lineTo(xCenter + 6f, ay - 10f)
+                            close()
+                        }
+                        drawPath(path, color = markerColor)
+                        drawContext.canvas.nativeCanvas.drawText(
+                            "LOSS", xCenter, ay + 20f,
+                            android.graphics.Paint().apply {
+                                color = android.graphics.Color.rgb(255, 92, 106)
+                                textSize = 22f
+                                textAlign = android.graphics.Paint.Align.CENTER
+                                isFakeBoldText = true
+                            }
+                        )
+                    }
                 }
             }
 
@@ -521,7 +576,7 @@ private fun SetupScreen(
     timeframeSeconds: Int, onTimeframeChange: (Int) -> Unit,
     onStart: () -> Unit,
 ) {
-    Column(modifier = Modifier.fillMaxSize().background(BgBlack).padding(20.dp)) {
+    Column(modifier = Modifier.fillMaxSize().background(BgBlack).verticalScroll(rememberScrollState()).padding(20.dp)) {
         Text(if (language == "ur") "پریکٹس سیشن ترتیب دیں" else "Set Up Practice Session", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
         Text(
             if (language == "ur") "یہ سب ڈیمو رقم ہے — کوئی حقیقی پیسہ استعمال نہیں ہوتا" else "This is all virtual demo money — no real funds are used",
@@ -529,9 +584,9 @@ private fun SetupScreen(
         )
 
         Spacer(Modifier.height(24.dp))
-        AmountSelector(if (language == "ur") "ابتدائی ڈیمو بیلنس" else "Starting Demo Balance", listOf(10f, 20f, 50f, 100f), startingBalance, onStartingBalanceChange)
+        AmountSelector(if (language == "ur") "ابتدائی ڈیمو بیلنس" else "Starting Demo Balance", listOf(1f, 10f, 20f, 50f), startingBalance, onStartingBalanceChange)
         Spacer(Modifier.height(20.dp))
-        AmountSelector(if (language == "ur") "فی ٹریڈ رقم" else "Amount Per Trade", listOf(5f, 10f, 20f, 25f), tradeAmount, onTradeAmountChange)
+        AmountSelector(if (language == "ur") "فی ٹریڈ رقم" else "Amount Per Trade", listOf(1f, 5f, 10f, 20f), tradeAmount, onTradeAmountChange)
         Spacer(Modifier.height(20.dp))
         AmountSelector(if (language == "ur") "ہدف بیلنس" else "Target Balance", listOf(50f, 100f, 200f, 500f), targetBalance, onTargetBalanceChange)
         Spacer(Modifier.height(20.dp))
