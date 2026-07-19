@@ -36,6 +36,7 @@ private data class DemoCandle(
     val open: Float, val close: Float, val high: Float, val low: Float,
     val forming: Boolean = false,
     val tradeResult: Boolean? = null, // null = no trade placed on this candle; true = win; false = loss
+    val entryPrice: Float? = null,    // exact live price at the moment the trade was placed
 ) {
     val isBullish get() = close >= open
     val bodySize get() = kotlin.math.abs(close - open)
@@ -65,6 +66,7 @@ fun PracticeScreen(language: String) {
     var lastExplanation by remember { mutableStateOf<String?>(null) }
     var isSettling by remember { mutableStateOf(false) } // brief "trade executing" pause after candle closes
     var pendingGuess by remember { mutableStateOf<Boolean?>(null) }
+    var entryPrice by remember { mutableStateOf<Float?>(null) }
     var secondsLeft by remember { mutableStateOf(timeframeSeconds.toFloat()) }
     var showSettings by remember { mutableStateOf(false) }
 
@@ -81,6 +83,7 @@ fun PracticeScreen(language: String) {
                 formingCandle = null
                 wins = 0; losses = 0; lastExplanation = null
                 pendingGuess = null
+                entryPrice = null
                 gameState = GameState.PLAYING
             }
         )
@@ -121,17 +124,19 @@ fun PracticeScreen(language: String) {
         isSettling = true
         delay(500)
         val guess = pendingGuess
-        val correct = guess?.let { it == (close >= open) }
-        val final = DemoCandle(open, close, high, low, tradeResult = correct)
+        val entry = entryPrice
+        val correct = if (guess != null && entry != null) guess == (close >= entry) else null
+        val final = DemoCandle(open, close, high, low, tradeResult = correct, entryPrice = entry)
         if (guess != null && correct != null) {
             if (correct) { wins++; balance += tradeAmount; soundManager.playSuccess() } else { losses++; balance -= tradeAmount; soundManager.playError() }
-            lastExplanation = explainCandle(final, language)
+            lastExplanation = explainCandle(final, language, entry)
         } else {
             lastExplanation = null
         }
         candles = (candles + final).takeLast(24)
         formingCandle = null
         pendingGuess = null
+        entryPrice = null
         isSettling = false
 
         if (balance <= 0f || balance >= targetBalance) {
@@ -191,7 +196,7 @@ fun PracticeScreen(language: String) {
 
         // ---------- Live chart with real forming candle + countdown ----------
         Box(modifier = Modifier.fillMaxWidth().height(220.dp).background(PanelDark, RoundedCornerShape(16.dp)).padding(12.dp)) {
-            LiveCandleChart(candles = candles, formingCandle = formingCandle)
+            LiveCandleChart(candles = candles, formingCandle = formingCandle, liveEntryPrice = entryPrice)
             // Countdown ring, top-right corner, only while a candle is actively forming.
             if (formingCandle != null && !isSettling) {
                 Box(modifier = Modifier.align(Alignment.TopEnd)) {
@@ -219,7 +224,7 @@ fun PracticeScreen(language: String) {
             Spacer(Modifier.height(10.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Button(
-                    onClick = { tapFeedback(); pendingGuess = true },
+                    onClick = { tapFeedback(); pendingGuess = true; entryPrice = formingCandle?.close ?: candles.last().close },
                     colors = ButtonDefaults.buttonColors(
                         containerColor = if (pendingGuess == true) BrandGreen else BrandGreen.copy(alpha = 0.15f),
                         contentColor = if (pendingGuess == true) Color(0xFF04120B) else BrandGreen
@@ -228,7 +233,7 @@ fun PracticeScreen(language: String) {
                 ) { Icon(Icons.Filled.TrendingUp, contentDescription = null); Spacer(Modifier.width(6.dp)); Text(if (language == "ur") "اوپر" else "Up") }
 
                 Button(
-                    onClick = { tapFeedback(); pendingGuess = false },
+                    onClick = { tapFeedback(); pendingGuess = false; entryPrice = formingCandle?.close ?: candles.last().close },
                     colors = ButtonDefaults.buttonColors(
                         containerColor = if (pendingGuess == false) BrandRed else BrandRed.copy(alpha = 0.15f),
                         contentColor = if (pendingGuess == false) Color.White else BrandRed
@@ -390,7 +395,7 @@ private fun ScoreCard(modifier: Modifier, label: String, value: String, color: C
 }
 
 @Composable
-private fun LiveCandleChart(candles: List<DemoCandle>, formingCandle: DemoCandle?) {
+private fun LiveCandleChart(candles: List<DemoCandle>, formingCandle: DemoCandle?, liveEntryPrice: Float? = null) {
     // Smooth "slide in" animation: whenever the candle count changes (a candle just
     // finalized and a new one starts forming), the whole chart nudges in from the
     // right instead of snapping — this is what makes it feel like a live feed.
@@ -408,7 +413,7 @@ private fun LiveCandleChart(candles: List<DemoCandle>, formingCandle: DemoCandle
         val candleWidthPx = widthPx / totalSlots
         val shiftPx = candleWidthPx * slideOffset.value
 
-        val allValues = allCandles.flatMap { listOf(it.high, it.low) }
+        val allValues = allCandles.flatMap { listOf(it.high, it.low) } + listOfNotNull(liveEntryPrice)
         val maxV = allValues.maxOrNull() ?: 1f
         val minV = allValues.minOrNull() ?: 0f
         val range = max(maxV - minV, 0.01f)
@@ -520,6 +525,27 @@ private fun LiveCandleChart(candles: List<DemoCandle>, formingCandle: DemoCandle
                     strokeWidth = 1.5f, pathEffect = dash
                 )
             }
+
+            // Entry-point marker — exactly where the trade was placed. This is the
+            // reference line win/loss is judged against, drawn distinctly (gold,
+            // dotted) so it's clearly different from the live price line above.
+            liveEntryPrice?.let { entry ->
+                val y = yFor(entry)
+                val dash = PathEffect.dashPathEffect(floatArrayOf(4f, 5f), 0f)
+                drawLine(
+                    color = Color(0xFFE3B934),
+                    start = Offset(0f, y), end = Offset(size.width, y),
+                    strokeWidth = 1.8f, pathEffect = dash
+                )
+                drawContext.canvas.nativeCanvas.drawText(
+                    "ENTRY", 8f, y - 6f,
+                    android.graphics.Paint().also { entryPaint ->
+                        entryPaint.color = android.graphics.Color.rgb(227, 185, 52)
+                        entryPaint.textSize = 20f
+                        entryPaint.isFakeBoldText = true
+                    }
+                )
+            }
         }
     }
 }
@@ -538,12 +564,24 @@ private fun generateInitialCandles(): List<DemoCandle> {
     return list
 }
 
-private fun explainCandle(c: DemoCandle, language: String): String {
+private fun explainCandle(c: DemoCandle, language: String, entryPrice: Float?): String {
     val wickTop = c.high - max(c.open, c.close)
     val wickBottom = min(c.open, c.close) - c.low
     val bigWick = wickTop > c.bodySize * 0.8f || wickBottom > c.bodySize * 0.8f
 
-    return if (language == "ur") {
+    val entryLine = if (entryPrice != null) {
+        val movedUp = c.close >= entryPrice
+        val diff = "%.2f".format(kotlin.math.abs(c.close - entryPrice))
+        if (language == "ur") {
+            if (movedUp) "قیمت آپ کے انٹری پوائنٹ سے $diff پوائنٹ اوپر بند ہوئی۔ "
+            else "قیمت آپ کے انٹری پوائنٹ سے $diff پوائنٹ نیچے بند ہوئی۔ "
+        } else {
+            if (movedUp) "Price closed $diff points above your entry point. "
+            else "Price closed $diff points below your entry point. "
+        }
+    } else ""
+
+    val shapeExplanation = if (language == "ur") {
         when {
             c.isBullish && bigWick -> "یہ کینڈل سبز بنی کیونکہ قیمت آخر میں خریداری کے دباؤ سے اوپر بند ہوئی، لیکن لمبی بتی سے پتہ چلتا ہے کہ درمیان میں فروخت کا دباؤ بھی تھا۔"
             c.isBullish -> "یہ کینڈل سبز بنی کیونکہ بند ہونے کی قیمت کھلنے کی قیمت سے زیادہ رہی — خریداری کا دباؤ حاوی رہا۔"
@@ -558,6 +596,8 @@ private fun explainCandle(c: DemoCandle, language: String): String {
             else -> "This candle closed red because the close price ended lower than the open — selling pressure was dominant this round."
         }
     }
+
+    return entryLine + shapeExplanation
 }
 
 @Composable

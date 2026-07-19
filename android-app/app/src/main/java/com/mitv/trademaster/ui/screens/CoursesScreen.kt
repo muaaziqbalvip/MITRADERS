@@ -61,8 +61,7 @@ fun CoursesScreen(language: String, onCourseSelected: (Course) -> Unit) {
     val scope = rememberCoroutineScope()
 
     LaunchedEffect(Unit) {
-        scope.launch {
-            val loadedCourses = try { repo.getCourses() } catch (e: Exception) { emptyList() }
+        repo.observeCourses().collect { loadedCourses ->
             courses = loadedCourses
             // Pull lesson counts per course so we can show real progress bars.
             val map = mutableMapOf<String, List<Lesson>>()

@@ -43,7 +43,6 @@ fun PaymentScreen(studentName: String, onSubmitted: () -> Unit) {
     val configRepo = remember { RemoteConfigRepository() }
     val scope = rememberCoroutineScope()
 
-    var config by remember { mutableStateOf<com.mitv.trademaster.data.AppConfig?>(null) }
     var screenshotUri by remember { mutableStateOf<Uri?>(null) }
     var isSubmitting by remember { mutableStateOf(false) }
     var submitted by remember { mutableStateOf(false) }
@@ -51,9 +50,7 @@ fun PaymentScreen(studentName: String, onSubmitted: () -> Unit) {
 
     val pickScreenshot = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { screenshotUri = it }
 
-    LaunchedEffect(Unit) {
-        config = withContext(Dispatchers.IO) { configRepo.getConfig() }
-    }
+    val config by configRepo.observeConfig().collectAsState(initial = null)
 
     Column(
         modifier = Modifier.fillMaxSize().background(BgBlack).verticalScroll(rememberScrollState()).padding(20.dp),

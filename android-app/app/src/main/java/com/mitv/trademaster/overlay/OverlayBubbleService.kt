@@ -282,7 +282,9 @@ class OverlayBubbleService : Service() {
             if (frame != null) {
                 analyzeBitmap(frame!!, signalDot, signalLabel, captureBtn)
             } else {
-                signalLabel.post { signalLabel.text = "  Couldn't read screen — try again" }
+                signalLabel.post {
+                    signalLabel.text = "  Couldn't read screen. If this keeps happening, check your phone's battery/autostart settings for this app."
+                }
             }
         }
     }
@@ -291,21 +293,30 @@ class OverlayBubbleService : Service() {
         captureBtn.isEnabled = false
         signalLabel.text = "  Analyzing…"
         CoroutineScope(Dispatchers.Default).launch {
-            val result = ChartAnalyzer.analyze(bitmap)
-            val color = when (result.direction) {
-                Direction.UP -> Color.parseColor("#34E39A")
-                Direction.DOWN -> Color.parseColor("#FF5C6A")
-                Direction.NEUTRAL -> Color.parseColor("#7C8B8F")
-            }
-            val text = when (result.direction) {
-                Direction.UP -> "  Bullish lean (${result.confidence.name.lowercase()})"
-                Direction.DOWN -> "  Bearish lean (${result.confidence.name.lowercase()})"
-                Direction.NEUTRAL -> "  No clear lean"
-            }
-            signalDot.post {
-                (signalDot.background as GradientDrawable).setColor(color)
-                signalLabel.text = text
-                captureBtn.isEnabled = true
+            try {
+                val result = ChartAnalyzer.analyze(bitmap)
+                val color = when (result.direction) {
+                    Direction.UP -> Color.parseColor("#34E39A")
+                    Direction.DOWN -> Color.parseColor("#FF5C6A")
+                    Direction.NEUTRAL -> Color.parseColor("#7C8B8F")
+                }
+                val text = when (result.direction) {
+                    Direction.UP -> "  Bullish lean (${result.confidence.name.lowercase()})"
+                    Direction.DOWN -> "  Bearish lean (${result.confidence.name.lowercase()})"
+                    Direction.NEUTRAL -> "  No clear lean"
+                }
+                signalDot.post {
+                    (signalDot.background as GradientDrawable).setColor(color)
+                    signalLabel.text = text
+                    captureBtn.isEnabled = true
+                }
+            } catch (e: Exception) {
+                // Never leave the button stuck on "Analyzing…" — always resolve
+                // to something the student can act on (retry).
+                signalLabel.post {
+                    signalLabel.text = "  Analysis failed — try again"
+                    captureBtn.isEnabled = true
+                }
             }
         }
     }

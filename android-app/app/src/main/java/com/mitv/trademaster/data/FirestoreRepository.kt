@@ -71,6 +71,31 @@ class FirestoreRepository {
         return snap.documents.mapNotNull { it.toObject<Lesson>()?.copy(id = it.id) }
     }
 
+    /**
+     * Live-updating course list. Any add/edit/delete the admin does in the
+     * admin panel reaches this within a second or two — no need to leave
+     * and re-enter the screen, no app restart.
+     */
+    fun observeCourses(): kotlinx.coroutines.flow.Flow<List<Course>> = kotlinx.coroutines.flow.callbackFlow {
+        val registration = db.collection("courses").orderBy("order")
+            .addSnapshotListener { snap, _ ->
+                val list = snap?.documents?.mapNotNull { it.toObject<Course>()?.copy(id = it.id) } ?: emptyList()
+                trySend(list)
+            }
+        kotlinx.coroutines.channels.awaitClose { registration.remove() }
+    }
+
+    /** Live-updating lessons for a course — same reasoning as [observeCourses]. */
+    fun observeLessons(courseId: String): kotlinx.coroutines.flow.Flow<List<Lesson>> = kotlinx.coroutines.flow.callbackFlow {
+        val registration = db.collection("courses").document(courseId)
+            .collection("lessons").orderBy("order")
+            .addSnapshotListener { snap, _ ->
+                val list = snap?.documents?.mapNotNull { it.toObject<Lesson>()?.copy(id = it.id) } ?: emptyList()
+                trySend(list)
+            }
+        kotlinx.coroutines.channels.awaitClose { registration.remove() }
+    }
+
     // ------------------------------------------------------------------
     // Announcements (admin-authored, shown on Home screen)
     // ------------------------------------------------------------------

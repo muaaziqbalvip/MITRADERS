@@ -56,10 +56,18 @@ fun LessonDetailScreen(course: Course, language: String, onBack: () -> Unit, res
     val scope = rememberCoroutineScope()
 
     LaunchedEffect(course.id) {
-        val loaded = try { repo.getLessons(course.id) } catch (e: Exception) { emptyList() }
-        lessons = loaded
-        val resumeTarget = resumeLessonId?.let { id -> loaded.find { it.id == id } }
-        selectedLesson = resumeTarget ?: loaded.firstOrNull()
+        var hasSetInitialLesson = false
+        repo.observeLessons(course.id).collect { loaded ->
+            lessons = loaded
+            if (!hasSetInitialLesson) {
+                val resumeTarget = resumeLessonId?.let { id -> loaded.find { it.id == id } }
+                selectedLesson = resumeTarget ?: loaded.firstOrNull()
+                hasSetInitialLesson = true
+            } else {
+                // Keep viewing the same lesson (now with live-updated content) if it still exists.
+                selectedLesson = loaded.find { it.id == selectedLesson?.id } ?: selectedLesson
+            }
+        }
     }
 
     // Remember "last viewed lesson" for this course whenever the student switches lessons,
