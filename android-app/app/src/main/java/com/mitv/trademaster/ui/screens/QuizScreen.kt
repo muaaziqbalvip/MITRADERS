@@ -190,7 +190,7 @@ private fun QuizForm(
     onAnswer: (Int, Int) -> Unit,
     onSubmit: () -> Unit,
 ) {
-    Column(modifier = Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp)) {
+    Column(modifier = Modifier.fillMaxSize().fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp)) {
         Text(
             if (language == "ur") "${quiz.questions.size} سوالات — پاس ہونے کے لیے 70% درست چاہیے"
             else "${quiz.questions.size} questions — 70% correct needed to pass",
@@ -260,7 +260,7 @@ private fun QuizResult(
 ) {
     val accent = if (passed) BrandGreen else BrandRed
 
-    Column(modifier = Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+    Column(modifier = Modifier.fillMaxSize().fillMaxWidth().verticalScroll(rememberScrollState()).padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         Box(modifier = Modifier.size(80.dp).clip(CircleShape).background(accent.copy(alpha = 0.14f)), contentAlignment = Alignment.Center) {
             Icon(
                 if (passed) Icons.Filled.WorkspacePremium else Icons.Filled.Replay,
