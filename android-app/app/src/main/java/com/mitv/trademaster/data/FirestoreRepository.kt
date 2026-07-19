@@ -7,6 +7,7 @@ import com.mitv.trademaster.data.model.Course
 import com.mitv.trademaster.data.model.Lesson
 import com.mitv.trademaster.data.model.PaymentSubmission
 import com.mitv.trademaster.data.model.StudentProfile
+import kotlinx.coroutines.flow.awaitClose
 import kotlinx.coroutines.tasks.await
 
 /**
@@ -82,7 +83,7 @@ class FirestoreRepository {
                 val list = snap?.documents?.mapNotNull { it.toObject<Course>()?.copy(id = it.id) } ?: emptyList()
                 trySend(list)
             }
-        kotlinx.coroutines.channels.awaitClose { registration.remove() }
+        awaitClose { registration.remove() }
     }
 
     /** Live-updating lessons for a course — same reasoning as [observeCourses]. */
@@ -93,7 +94,7 @@ class FirestoreRepository {
                 val list = snap?.documents?.mapNotNull { it.toObject<Lesson>()?.copy(id = it.id) } ?: emptyList()
                 trySend(list)
             }
-        kotlinx.coroutines.channels.awaitClose { registration.remove() }
+        awaitClose { registration.remove() }
     }
 
     // ------------------------------------------------------------------
