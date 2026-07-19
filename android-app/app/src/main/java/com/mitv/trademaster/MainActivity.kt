@@ -106,6 +106,7 @@ fun AppRoot(initialDeepLink: String? = null) {
         composable(Routes.PAYMENT_PENDING) {
             PaymentScreen(
                 studentName = "",
+                language = language,
                 onSubmitted = {
                     // Stay on a "submitted" state within PaymentScreen; admin will
                     // activate the account. Re-checking status happens on next

@@ -36,7 +36,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 @Composable
-fun PaymentScreen(studentName: String, onSubmitted: () -> Unit) {
+fun PaymentScreen(studentName: String, language: String = "en", onSubmitted: () -> Unit) {
     val context = LocalContext.current
     val authRepo = remember { AuthRepository(context) }
     val firestoreRepo = remember { FirestoreRepository() }
@@ -57,12 +57,19 @@ fun PaymentScreen(studentName: String, onSubmitted: () -> Unit) {
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Spacer(Modifier.height(12.dp))
-        Icon(Icons.Filled.QrCode2, contentDescription = null, tint = BrandGreen, modifier = Modifier.size(36.dp))
-        Spacer(Modifier.height(12.dp))
-        Text("Activate Your Subscription", color = Color.White, fontSize = 19.sp, fontWeight = FontWeight.Bold)
+        Box(modifier = Modifier.size(64.dp).clip(RoundedCornerShape(18.dp)).background(BrandGreen.copy(alpha = 0.12f)), contentAlignment = Alignment.Center) {
+            Icon(Icons.Filled.QrCode2, contentDescription = null, tint = BrandGreen, modifier = Modifier.size(32.dp))
+        }
+        Spacer(Modifier.height(14.dp))
         Text(
-            "PKR ${config?.subscriptionPricePkr ?: 500} / month — full access to all lessons, analyzer, and practice tools",
-            color = BrandSilverDim, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp)
+            if (language == "ur") "اپنی سبسکرپشن فعال کریں" else "Activate Your Subscription",
+            color = Color.White, fontSize = 19.sp, fontWeight = FontWeight.Bold
+        )
+        Text(
+            if (language == "ur") "PKR ${config?.subscriptionPricePkr ?: 500} / ماہانہ — تمام اسباق، اینالائزر اور پریکٹس ٹولز تک مکمل رسائی"
+            else "PKR ${config?.subscriptionPricePkr ?: 500} / month — full access to all lessons, analyzer, and practice tools",
+            color = BrandSilverDim, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp),
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center
         )
 
         Spacer(Modifier.height(20.dp))
@@ -75,7 +82,10 @@ fun PaymentScreen(studentName: String, onSubmitted: () -> Unit) {
             if (!config?.paymentQrUrl.isNullOrBlank()) {
                 AsyncImage(model = config?.paymentQrUrl, contentDescription = "Payment QR Code", contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize().padding(12.dp))
             } else {
-                Text("QR code not set yet\nContact support on WhatsApp", color = BrandSilverDim, fontSize = 12.sp, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                Text(
+                    if (language == "ur") "QR کوڈ ابھی سیٹ نہیں ہوا\nواٹس ایپ پر سپورٹ سے رابطہ کریں" else "QR code not set yet\nContact support on WhatsApp",
+                    color = BrandSilverDim, fontSize = 12.sp, textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                )
             }
         }
 
@@ -86,16 +96,20 @@ fun PaymentScreen(studentName: String, onSubmitted: () -> Unit) {
                 Column(Modifier.padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                     Icon(Icons.Filled.CheckCircle, contentDescription = null, tint = BrandGreen, modifier = Modifier.size(32.dp))
                     Spacer(Modifier.height(10.dp))
-                    Text("Payment Submitted", color = Color.White, fontWeight = FontWeight.Bold)
+                    Text(if (language == "ur") "ادائیگی جمع ہو گئی" else "Payment Submitted", color = Color.White, fontWeight = FontWeight.Bold)
                     Spacer(Modifier.height(6.dp))
                     Text(
-                        "Our team will confirm your payment and activate your account shortly. Please be patient.",
+                        if (language == "ur") "ہماری ٹیم آپ کی ادائیگی کی تصدیق کرے گی اور جلد آپ کا اکاؤنٹ فعال کر دے گی۔ براہ کرم صبر کریں۔"
+                        else "Our team will confirm your payment and activate your account shortly. Please be patient.",
                         color = BrandSilverDim, fontSize = 12.sp, textAlign = androidx.compose.ui.text.style.TextAlign.Center
                     )
                 }
             }
         } else {
-            Text("After paying, upload a screenshot of your payment below:", color = BrandSilverDim, fontSize = 12.sp)
+            Text(
+                if (language == "ur") "ادائیگی کے بعد نیچے اپنی ادائیگی کا اسکرین شاٹ اپلوڈ کریں:" else "After paying, upload a screenshot of your payment below:",
+                color = BrandSilverDim, fontSize = 12.sp
+            )
             Spacer(Modifier.height(12.dp))
 
             Box(
@@ -108,13 +122,16 @@ fun PaymentScreen(studentName: String, onSubmitted: () -> Unit) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Icon(Icons.Filled.Upload, contentDescription = null, tint = BrandSilverDim)
                         Spacer(Modifier.height(6.dp))
-                        Text("Tap to select payment screenshot", color = BrandSilverDim, fontSize = 12.sp)
+                        Text(
+                            if (language == "ur") "ادائیگی کا اسکرین شاٹ منتخب کرنے کے لیے ٹیپ کریں" else "Tap to select payment screenshot",
+                            color = BrandSilverDim, fontSize = 12.sp
+                        )
                     }
                 }
             }
             Spacer(Modifier.height(8.dp))
             TextButton(onClick = { pickScreenshot.launch("image/*") }) {
-                Text("Choose Screenshot", color = BrandGreen, fontSize = 13.sp)
+                Text(if (language == "ur") "اسکرین شاٹ منتخب کریں" else "Choose Screenshot", color = BrandGreen, fontSize = 13.sp)
             }
 
             errorMsg?.let {
@@ -127,14 +144,14 @@ fun PaymentScreen(studentName: String, onSubmitted: () -> Unit) {
                 onClick = {
                     val uid = authRepo.currentUser?.uid ?: return@Button
                     val uri = screenshotUri
-                    if (uri == null) { errorMsg = "Please select a screenshot first"; return@Button }
+                    if (uri == null) { errorMsg = if (language == "ur") "براہ کرم پہلے اسکرین شاٹ منتخب کریں" else "Please select a screenshot first"; return@Button }
                     isSubmitting = true
                     errorMsg = null
                     scope.launch {
                         try {
                             val uploadResult = withContext(Dispatchers.IO) { ImgBBUploader.uploadImage(context, uri) }
                             val url = uploadResult.getOrElse {
-                                errorMsg = "Upload failed: ${it.message}"
+                                errorMsg = (if (language == "ur") "اپلوڈ ناکام: " else "Upload failed: ") + it.message
                                 isSubmitting = false
                                 return@launch
                             }
@@ -151,7 +168,7 @@ fun PaymentScreen(studentName: String, onSubmitted: () -> Unit) {
                             submitted = true
                         } catch (e: Exception) {
                             isSubmitting = false
-                            errorMsg = "Could not submit: ${e.message}"
+                            errorMsg = (if (language == "ur") "جمع نہیں ہو سکا: " else "Could not submit: ") + e.message
                         }
                     }
                 },
@@ -161,7 +178,7 @@ fun PaymentScreen(studentName: String, onSubmitted: () -> Unit) {
                 modifier = Modifier.fillMaxWidth().height(50.dp)
             ) {
                 if (isSubmitting) CircularProgressIndicator(modifier = Modifier.size(20.dp), color = Color(0xFF04120B), strokeWidth = 2.dp)
-                else Text("Submit for Approval", fontWeight = FontWeight.Bold)
+                else Text(if (language == "ur") "منظوری کے لیے جمع کریں" else "Submit for Approval", fontWeight = FontWeight.Bold)
             }
         }
 
@@ -180,7 +197,7 @@ fun PaymentScreen(studentName: String, onSubmitted: () -> Unit) {
         ) {
             Icon(Icons.Filled.Chat, contentDescription = null, modifier = Modifier.size(18.dp))
             Spacer(Modifier.width(8.dp))
-            Text("Contact Support on WhatsApp", fontSize = 13.sp)
+            Text(if (language == "ur") "واٹس ایپ پر سپورٹ سے رابطہ کریں" else "Contact Support on WhatsApp", fontSize = 13.sp)
         }
 
         Spacer(Modifier.height(40.dp))

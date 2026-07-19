@@ -37,7 +37,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 @Composable
-fun AnalyzerScreen() {
+fun AnalyzerScreen(language: String = "en") {
     val context = LocalContext.current
     val authRepo = remember { AuthRepository(context) }
     val firestoreRepo = remember { FirestoreRepository() }
@@ -59,9 +59,12 @@ fun AnalyzerScreen() {
             .verticalScroll(rememberScrollState())
             .padding(20.dp)
     ) {
-        Text("Chart Analyzer", color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+        Text(if (language == "ur") "چارٹ اینالائزر" else "Chart Analyzer", color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(4.dp))
-        Text("Detailed educational pattern breakdown of your chart", color = BrandSilverDim, fontSize = 12.sp)
+        Text(
+            if (language == "ur") "آپ کے چارٹ کا تفصیلی تعلیمی پیٹرن جائزہ" else "Detailed educational pattern breakdown of your chart",
+            color = BrandSilverDim, fontSize = 12.sp
+        )
 
         Spacer(Modifier.height(20.dp))
 
@@ -75,7 +78,10 @@ fun AnalyzerScreen() {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Icon(Icons.Filled.CameraAlt, contentDescription = null, tint = BrandSilverDim, modifier = Modifier.size(32.dp))
                     Spacer(Modifier.height(8.dp))
-                    Text("Tap below to select a chart screenshot", color = BrandSilverDim, fontSize = 12.sp)
+                    Text(
+                        if (language == "ur") "چارٹ اسکرین شاٹ منتخب کرنے کے لیے نیچے ٹیپ کریں" else "Tap below to select a chart screenshot",
+                        color = BrandSilverDim, fontSize = 12.sp
+                    )
                 }
             }
         }
@@ -89,7 +95,7 @@ fun AnalyzerScreen() {
                 border = androidx.compose.foundation.BorderStroke(1.dp, LineSubtle),
                 shape = RoundedCornerShape(12.dp),
                 modifier = Modifier.weight(1f)
-            ) { Text("Select Screenshot", fontSize = 13.sp) }
+            ) { Text(if (language == "ur") "اسکرین شاٹ منتخب کریں" else "Select Screenshot", fontSize = 13.sp) }
 
             Button(
                 onClick = {
@@ -102,14 +108,14 @@ fun AnalyzerScreen() {
                                 context.contentResolver.openInputStream(imageUri!!)?.use { android.graphics.BitmapFactory.decodeStream(it) }
                             }
                             if (bitmap == null) {
-                                errorMsg = "Could not read image"
+                                errorMsg = if (language == "ur") "تصویر نہیں پڑھی جا سکی" else "Could not read image"
                             } else {
                                 val r = withContext(Dispatchers.Default) { ChartAnalyzer.analyze(bitmap) }
                                 result = r
                                 authRepo.currentUser?.uid?.let { uid -> scope.launch { runCatching { firestoreRepo.incrementAnalysesRun(uid) } } }
                             }
                         } catch (e: Exception) {
-                            errorMsg = "Analysis failed: ${e.message}"
+                            errorMsg = (if (language == "ur") "تجزیہ ناکام: " else "Analysis failed: ") + e.message
                         } finally {
                             isAnalyzing = false
                         }
@@ -121,7 +127,7 @@ fun AnalyzerScreen() {
                 modifier = Modifier.weight(1f)
             ) {
                 if (isAnalyzing) CircularProgressIndicator(modifier = Modifier.size(18.dp), color = Color(0xFF04120B), strokeWidth = 2.dp)
-                else Text("Analyze", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                else Text(if (language == "ur") "تجزیہ کریں" else "Analyze", fontSize = 13.sp, fontWeight = FontWeight.Bold)
             }
         }
 
@@ -132,9 +138,9 @@ fun AnalyzerScreen() {
 
         result?.let { r ->
             Spacer(Modifier.height(18.dp))
-            LeanCard(r)
+            LeanCard(r, language)
             Spacer(Modifier.height(14.dp))
-            DetailedSignalPanel(r)
+            DetailedSignalPanel(r, language)
         }
 
         Spacer(Modifier.height(60.dp))
@@ -142,11 +148,11 @@ fun AnalyzerScreen() {
 }
 
 @Composable
-private fun LeanCard(r: com.mitv.trademaster.analysis.AnalysisResult) {
+private fun LeanCard(r: com.mitv.trademaster.analysis.AnalysisResult, language: String) {
     val (color, icon, label) = when (r.direction) {
-        Direction.UP -> Triple(BrandGreen, Icons.Filled.TrendingUp, "Educational Lean: UP")
-        Direction.DOWN -> Triple(BrandRed, Icons.Filled.TrendingDown, "Educational Lean: DOWN")
-        Direction.NEUTRAL -> Triple(BrandSilverDim, Icons.Filled.TrendingFlat, "No Clear Lean")
+        Direction.UP -> Triple(BrandGreen, Icons.Filled.TrendingUp, if (language == "ur") "تعلیمی رجحان: اوپر" else "Educational Lean: UP")
+        Direction.DOWN -> Triple(BrandRed, Icons.Filled.TrendingDown, if (language == "ur") "تعلیمی رجحان: نیچے" else "Educational Lean: DOWN")
+        Direction.NEUTRAL -> Triple(BrandSilverDim, Icons.Filled.TrendingFlat, if (language == "ur") "کوئی واضح رجحان نہیں" else "No Clear Lean")
     }
 
     Card(
@@ -169,11 +175,11 @@ private fun LeanCard(r: com.mitv.trademaster.analysis.AnalysisResult) {
 }
 
 @Composable
-private fun DetailedSignalPanel(r: com.mitv.trademaster.analysis.AnalysisResult) {
+private fun DetailedSignalPanel(r: com.mitv.trademaster.analysis.AnalysisResult, language: String) {
     val (color, label) = when (r.direction) {
-        Direction.UP -> BrandGreen to "Bullish Lean"
-        Direction.DOWN -> BrandRed to "Bearish Lean"
-        Direction.NEUTRAL -> BrandSilverDim to "Neutral / No Clear Lean"
+        Direction.UP -> BrandGreen to (if (language == "ur") "تیزی کا رجحان" else "Bullish Lean")
+        Direction.DOWN -> BrandRed to (if (language == "ur") "مندی کا رجحان" else "Bearish Lean")
+        Direction.NEUTRAL -> BrandSilverDim to (if (language == "ur") "غیر جانبدار / کوئی واضح رجحان نہیں" else "Neutral / No Clear Lean")
     }
 
     Card(colors = CardDefaults.cardColors(containerColor = PanelDark), shape = RoundedCornerShape(20.dp), modifier = Modifier.fillMaxWidth()) {
@@ -189,7 +195,7 @@ private fun DetailedSignalPanel(r: com.mitv.trademaster.analysis.AnalysisResult)
             }
 
             Spacer(Modifier.height(16.dp))
-            Text("Trend Strength", color = BrandSilverDim, fontSize = 10.sp)
+            Text(if (language == "ur") "رجحان کی طاقت" else "Trend Strength", color = BrandSilverDim, fontSize = 10.sp)
             Spacer(Modifier.height(6.dp))
             LinearProgressIndicator(
                 progress = { r.trendStrengthPercent / 100f },
@@ -200,7 +206,7 @@ private fun DetailedSignalPanel(r: com.mitv.trademaster.analysis.AnalysisResult)
             Text("${r.trendStrengthPercent}%", color = BrandSilver, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
 
             Spacer(Modifier.height(18.dp))
-            Text("Signal Breakdown", color = BrandSilverDim, fontSize = 10.sp)
+            Text(if (language == "ur") "سگنل کی تفصیل" else "Signal Breakdown", color = BrandSilverDim, fontSize = 10.sp)
             Spacer(Modifier.height(8.dp))
             r.signals.forEach { signal ->
                 Row(modifier = Modifier.padding(vertical = 4.dp), verticalAlignment = Alignment.Top) {
@@ -214,7 +220,7 @@ private fun DetailedSignalPanel(r: com.mitv.trademaster.analysis.AnalysisResult)
             HorizontalDivider(color = LineSubtle)
             Spacer(Modifier.height(14.dp))
 
-            Text("Full Explanation", color = BrandSilverDim, fontSize = 10.sp)
+            Text(if (language == "ur") "مکمل وضاحت" else "Full Explanation", color = BrandSilverDim, fontSize = 10.sp)
             Spacer(Modifier.height(6.dp))
             Text(r.explanation, color = BrandSilverDim, fontSize = 12.sp, lineHeight = 18.sp)
 

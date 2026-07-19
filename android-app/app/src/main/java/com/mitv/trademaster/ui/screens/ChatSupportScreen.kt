@@ -40,7 +40,7 @@ import kotlinx.coroutines.withContext
 import java.io.ByteArrayOutputStream
 
 @Composable
-fun ChatSupportScreen() {
+fun ChatSupportScreen(language: String = "en") {
     val context = LocalContext.current
     val authRepo = remember { AuthRepository(context) }
     val firestoreRepo = remember { FirestoreRepository() }
@@ -87,7 +87,8 @@ fun ChatSupportScreen() {
                 )
 
                 if (config.groqApiKey.isBlank()) {
-                    firestoreRepo.sendChatMessage(uid, ChatMessage(uid = uid, sender = "ai", text = "AI Assistant isn't fully set up yet — please reach us on WhatsApp at +${config.whatsappNumber}.", timestamp = System.currentTimeMillis()))
+                    val notSetUp = if (language == "ur") "AI اسسٹنٹ ابھی مکمل طور پر تیار نہیں ہے — براہ کرم واٹس ایپ +${config.whatsappNumber} پر رابطہ کریں۔" else "AI Assistant isn't fully set up yet — please reach us on WhatsApp at +${config.whatsappNumber}."
+                    firestoreRepo.sendChatMessage(uid, ChatMessage(uid = uid, sender = "ai", text = notSetUp, timestamp = System.currentTimeMillis()))
                     return@launch
                 }
 
@@ -108,11 +109,14 @@ fun ChatSupportScreen() {
                     val msg = err.message.orEmpty()
                     when {
                         msg.contains("401") || msg.contains("invalid_api_key", ignoreCase = true) ->
-                            "AI Assistant is temporarily unavailable (invalid key) — please WhatsApp us at +${config.whatsappNumber} and we'll help directly."
+                            if (language == "ur") "AI اسسٹنٹ عارضی طور پر دستیاب نہیں (غلط کی) — براہ کرم واٹس ایپ +${config.whatsappNumber} پر رابطہ کریں، ہم براہ راست مدد کریں گے۔"
+                            else "AI Assistant is temporarily unavailable (invalid key) — please WhatsApp us at +${config.whatsappNumber} and we'll help directly."
                         msg.contains("429") ->
-                            "AI Assistant is a bit busy right now — please try again in a moment or WhatsApp us at +${config.whatsappNumber}."
+                            if (language == "ur") "AI اسسٹنٹ اس وقت مصروف ہے — براہ کرم تھوڑی دیر بعد کوشش کریں یا واٹس ایپ +${config.whatsappNumber} پر رابطہ کریں۔"
+                            else "AI Assistant is a bit busy right now — please try again in a moment or WhatsApp us at +${config.whatsappNumber}."
                         else ->
-                            "Sorry, I couldn't process that. Please try again or WhatsApp us at +${config.whatsappNumber}."
+                            if (language == "ur") "معذرت، یہ پروسیس نہیں ہو سکا۔ دوبارہ کوشش کریں یا واٹس ایپ +${config.whatsappNumber} پر رابطہ کریں۔"
+                            else "Sorry, I couldn't process that. Please try again or WhatsApp us at +${config.whatsappNumber}."
                     }
                 }
                 firestoreRepo.sendChatMessage(uid, ChatMessage(uid = uid, sender = "ai", text = replyText, timestamp = System.currentTimeMillis()))
@@ -124,13 +128,19 @@ fun ChatSupportScreen() {
 
     Column(modifier = Modifier.fillMaxSize().background(BgBlack)) {
         Row(modifier = Modifier.fillMaxWidth().padding(20.dp), verticalAlignment = Alignment.CenterVertically) {
-            Icon(Icons.Filled.SupportAgent, contentDescription = null, tint = BrandGreen)
-            Spacer(Modifier.width(10.dp))
+            Box(modifier = Modifier.size(40.dp).clip(RoundedCornerShape(12.dp)).background(BrandGreen.copy(alpha = 0.14f)), contentAlignment = Alignment.Center) {
+                Icon(Icons.Filled.SupportAgent, contentDescription = null, tint = BrandGreen, modifier = Modifier.size(20.dp))
+            }
+            Spacer(Modifier.width(12.dp))
             Column {
-                Text("AI Assistant", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                Text("Trading questions, chart help & account support", color = BrandSilverDim, fontSize = 11.sp)
+                Text(if (language == "ur") "AI اسسٹنٹ" else "AI Assistant", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                Text(
+                    if (language == "ur") "ٹریڈنگ سوالات، چارٹ مدد اور اکاؤنٹ سپورٹ" else "Trading questions, chart help & account support",
+                    color = BrandSilverDim, fontSize = 11.sp
+                )
             }
         }
+        HorizontalDivider(color = LineSubtle)
 
         LazyColumn(
             state = listState,
@@ -141,7 +151,8 @@ fun ChatSupportScreen() {
                 item {
                     Box(modifier = Modifier.fillMaxWidth().padding(top = 40.dp), contentAlignment = Alignment.Center) {
                         Text(
-                            "Ask about candlestick patterns, trading concepts, your subscription, or send a chart screenshot for a breakdown.",
+                            if (language == "ur") "کینڈل اسٹک پیٹرن، ٹریڈنگ تصورات، اپنی سبسکرپشن کے بارے میں پوچھیں، یا تجزیہ کے لیے چارٹ اسکرین شاٹ بھیجیں۔"
+                            else "Ask about candlestick patterns, trading concepts, your subscription, or send a chart screenshot for a breakdown.",
                             color = BrandSilverDim, fontSize = 12.sp,
                             textAlign = androidx.compose.ui.text.style.TextAlign.Center, lineHeight = 18.sp
                         )
@@ -158,7 +169,7 @@ fun ChatSupportScreen() {
                     AsyncImage(model = uri, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
                 }
                 Spacer(Modifier.width(10.dp))
-                Text("Image attached", color = BrandSilverDim, fontSize = 12.sp, modifier = Modifier.weight(1f))
+                Text(if (language == "ur") "تصویر منسلک ہے" else "Image attached", color = BrandSilverDim, fontSize = 12.sp, modifier = Modifier.weight(1f))
                 IconButton(onClick = { pendingImageUri = null }) {
                     Icon(Icons.Filled.Close, contentDescription = null, tint = BrandSilverDim, modifier = Modifier.size(16.dp))
                 }
@@ -173,7 +184,12 @@ fun ChatSupportScreen() {
             OutlinedTextField(
                 value = input,
                 onValueChange = { input = it },
-                placeholder = { Text("Type a message or attach a chart...", color = BrandSilverDim, fontSize = 13.sp) },
+                placeholder = {
+                    Text(
+                        if (language == "ur") "پیغام لکھیں یا چارٹ منسلک کریں..." else "Type a message or attach a chart...",
+                        color = BrandSilverDim, fontSize = 13.sp
+                    )
+                },
                 colors = OutlinedTextFieldDefaults.colors(
                     focusedBorderColor = BrandGreen, unfocusedBorderColor = LineSubtle,
                     focusedTextColor = Color.White, unfocusedTextColor = Color.White, cursorColor = BrandGreen,

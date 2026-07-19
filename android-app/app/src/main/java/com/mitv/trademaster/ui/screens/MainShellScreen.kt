@@ -103,7 +103,7 @@ fun MainShellScreen(language: String, onLanguageChanged: (String) -> Unit, onSig
         Box(modifier = Modifier.padding(padding).background(BgBlack).fillMaxSize()) {
             if (moreDestination != null) {
                 when (moreDestination) {
-                    "chat" -> ChatSupportScreen()
+                    "chat" -> ChatSupportScreen(language)
                     "account" -> AccountScreen(language, onSignedOut)
                     "settings" -> SettingsScreen(language, onLanguageChanged)
                     "islamic" -> IslamicScreen(language)
@@ -120,7 +120,7 @@ fun MainShellScreen(language: String, onLanguageChanged: (String) -> Unit, onSig
                             }
                         )
                     }
-                    composable(Tab.Analyzer.route) { AnalyzerScreen() }
+                    composable(Tab.Analyzer.route) { AnalyzerScreen(language) }
                     composable(Tab.Learn.route) {
                         if (selectedCourse == null) {
                             CoursesScreen(language) { course -> selectedCourse = course }
@@ -152,12 +152,17 @@ fun MainShellScreen(language: String, onLanguageChanged: (String) -> Unit, onSig
 @Composable
 private fun MoreSheet(language: String, onDismiss: () -> Unit, onSelect: (String) -> Unit) {
     ModalBottomSheet(onDismissRequest = onDismiss, containerColor = PanelDark) {
-        Column(Modifier.padding(20.dp)) {
+        Column(Modifier.padding(horizontal = 20.dp)) {
+            Text(
+                if (language == "ur") "مزید" else "More",
+                color = BrandSilverDim, fontSize = 12.sp, fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.padding(bottom = 14.dp)
+            )
             MoreItem(Icons.Filled.Chat, if (language == "ur") "سپورٹ چیٹ" else "Support Chat") { onSelect("chat") }
             MoreItem(Icons.Filled.AutoAwesome, if (language == "ur") "روحانی گوشہ" else "Spiritual Corner") { onSelect("islamic") }
             MoreItem(Icons.Filled.Person, if (language == "ur") "اکاؤنٹ" else "Account") { onSelect("account") }
             MoreItem(Icons.Filled.Settings, if (language == "ur") "سیٹنگز" else "Settings") { onSelect("settings") }
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(28.dp))
         }
     }
 }
@@ -177,9 +182,12 @@ private fun MoreItem(icon: androidx.compose.ui.graphics.vector.ImageVector, labe
             .padding(16.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Icon(icon, contentDescription = null, tint = BrandGreen, modifier = Modifier.size(20.dp))
+        Box(modifier = Modifier.size(36.dp).background(BrandGreen.copy(alpha = 0.12f), RoundedCornerShape(10.dp)), contentAlignment = Alignment.Center) {
+            Icon(icon, contentDescription = null, tint = BrandGreen, modifier = Modifier.size(18.dp))
+        }
         Spacer(Modifier.width(14.dp))
-        Text(label, color = Color.White, fontSize = 14.sp)
+        Text(label, color = Color.White, fontSize = 14.sp, modifier = Modifier.weight(1f))
+        Icon(Icons.Filled.ChevronRight, contentDescription = null, tint = BrandSilverDim, modifier = Modifier.size(18.dp))
     }
     Spacer(Modifier.height(8.dp))
 }
