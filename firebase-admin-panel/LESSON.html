@@ -1,0 +1,634 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MI Trade Master — Lesson Generator</title>
+<style>
+  :root{
+    --bg: #05080a; --panel: #0b1114; --panel-2: #0f171b; --line: #1c2a2f;
+    --green: #34e39a; --green-dim: #1a7a56; --red: #ff5c6a;
+    --silver: #cdd6d8; --silver-dim: #7c8b8f;
+    --mono: 'JetBrains Mono', 'Courier New', monospace;
+  }
+  * { box-sizing: border-box; }
+  body{
+    margin:0; background: radial-gradient(ellipse at top, #0d1518 0%, #05080a 60%);
+    color: var(--silver); font-family: var(--mono); min-height:100vh; padding: 30px 16px 80px;
+  }
+  .wrap{ max-width: 820px; margin: 0 auto; }
+  h1{ color:#fff; font-size:20px; margin: 0 0 4px; }
+  p.sub{ color: var(--silver-dim); font-size:12px; margin: 0 0 24px; }
+
+  .panel{
+    background: linear-gradient(180deg, var(--panel), var(--panel-2));
+    border: 1px solid var(--line); border-radius: 14px; padding: 20px; margin-bottom: 18px;
+  }
+  .panel h2{ font-size:12px; text-transform: uppercase; letter-spacing: 1.5px; color: var(--silver-dim); margin: 0 0 16px; }
+  .panel h2::before{ content:"// "; color: var(--green-dim); }
+
+  label{ display:block; font-size:11px; color:var(--silver-dim); margin: 12px 0 6px; }
+  input, textarea, select{
+    width:100%; background:#070b0d; border:1px solid var(--line); color:#fff;
+    padding:10px 12px; border-radius:8px; font-family: var(--mono); font-size:13px; outline:none;
+  }
+  input:focus, textarea:focus{ border-color: var(--green-dim); }
+
+  button{
+    background: linear-gradient(135deg, var(--green), #1fae7a);
+    color:#04120b; border:none; padding:11px 18px; border-radius:9px;
+    font-family: var(--mono); font-weight:700; font-size:12px; cursor:pointer;
+  }
+  button:disabled{ opacity: 0.5; cursor: not-allowed; }
+  button.secondary{ background: transparent; color: var(--silver); border: 1px solid var(--line); }
+  button.small{ padding: 6px 10px; font-size: 10px; }
+
+  .course-row{
+    display:flex; align-items:center; gap:10px; padding:12px; background:#070b0d;
+    border-radius:10px; margin-bottom:8px; border: 1px solid var(--line);
+  }
+  .course-row.selected{ border-color: var(--green-dim); background: rgba(52,227,154,0.06); }
+  .course-row input[type=checkbox]{ width:auto; }
+  .course-row .title{ color:#fff; font-size:13px; flex:1; }
+  .course-row .meta{ color: var(--silver-dim); font-size:10px; }
+  .badge{ padding:3px 8px; border-radius:20px; font-size:9px; font-weight:700; }
+  .badge.done{ background: rgba(52,227,154,0.12); color: var(--green); }
+  .badge.pending{ background: rgba(124,139,143,0.15); color: var(--silver-dim); }
+  .badge.running{ background: rgba(255,193,7,0.12); color: #ffc107; }
+  .badge.error{ background: rgba(255,92,106,0.12); color: var(--red); }
+
+  .log{
+    background:#070b0d; border-radius:10px; padding:14px; font-size:11px;
+    max-height:320px; overflow-y:auto; line-height:1.7; border: 1px solid var(--line);
+  }
+  .log .line{ margin-bottom:4px; }
+  .log .ok{ color: var(--green); }
+  .log .err{ color: var(--red); }
+  .log .info{ color: var(--silver-dim); }
+
+  .empty{ color: var(--silver-dim); font-size:12px; text-align:center; padding: 16px 0; }
+  ::-webkit-scrollbar{ width:8px; } ::-webkit-scrollbar-thumb{ background: var(--line); border-radius:4px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>MI Trade Master — Lesson Generator</h1>
+  <p class="sub">One-time tool: fetches your existing courses, asks Groq to write ordered topic lessons for each, and publishes them straight to Firestore. Run locally in a browser — nothing here is saved anywhere except your own Firebase project.</p>
+
+  <div class="panel">
+    <h2>1. Connection Status</h2>
+    <p id="connectStatus" style="font-size:12px;">Connecting automatically...</p>
+  </div>
+
+  <div class="panel" id="groqPanel" style="display:none;">
+    <h2>2. Groq API Keys</h2>
+    <p style="font-size:11px; color:var(--silver-dim); margin-top:0;">Used only in your browser to call Groq directly — never sent anywhere else. If Key 1 hits a rate limit, the tool automatically switches to Key 2 (and back) instead of stopping.</p>
+    <label>Groq Key 1</label>
+    <input type="password" id="groqKey" placeholder="gsk_DZ6zS......." />
+    <label>Groq Key 2 (optional, but recommended)</label>
+    <input type="password" id="groqKey2" placeholder="gsk_rKOw0gr...." />
+    <label>Lessons per chapter</label>
+    <input type="number" id="lessonsPerChapter" value="8" min="3" max="20" />
+    <label>Language(s)</label>
+    <select id="langMode">
+      <option value="both">English + Urdu (both, per lesson)</option>
+      <option value="en">English only</option>
+      <option value="ur">Urdu only</option>
+    </select>
+    <label style="display:flex; align-items:center; gap:8px; margin-top:14px;">
+      <input type="checkbox" id="replaceExisting" style="width:auto;" />
+      Replace existing lessons (deletes old topics in selected chapters first, then writes fresh ones)
+    </label>
+  </div>
+
+  <div class="panel" id="coursesPanel" style="display:none;">
+    <h2>3. Select Chapters to Generate</h2>
+    <div style="margin-bottom:10px; display:flex; gap:8px;">
+      <button class="secondary small" onclick="selectAllCourses(true)">Select All</button>
+      <button class="secondary small" onclick="selectAllCourses(false)">Select None</button>
+      <button class="secondary small" onclick="loadCourses()">Refresh List</button>
+    </div>
+    <div id="coursesList"></div>
+  </div>
+
+  <div class="panel" id="runPanel" style="display:none;">
+    <h2>4. Generate &amp; Publish</h2>
+    <p style="font-size:11px; color:var(--silver-dim); margin-top:0;">
+      For each selected chapter: existing lessons are listed first (so nothing
+      is duplicated), then new topic lessons are generated to fill the
+      requested count, in order, and written to
+      <code>courses/{courseId}/lessons</code>.
+    </p>
+    <div style="display:flex; gap:8px;">
+      <button onclick="runGeneration()" id="runBtn">Generate Lessons for Selected Chapters</button>
+      <button onclick="stopGeneration()" id="stopBtn" class="secondary" style="display:none; border-color:var(--red); color:var(--red);">■ Stop</button>
+    </div>
+    <p id="resumeNote" style="display:none; font-size:11px; color:#ffc107; margin: 10px 0 0;"></p>
+    <div class="log" id="log" style="margin-top:16px;"><div class="line info">Ready. Connect Firebase, add your Groq key, select chapters, then run.</div></div>
+  </div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script>
+let db = null;
+let auth = null;
+let coursesCache = [];
+let selectedCourseIds = new Set();
+let stopRequested = false;   // set true by the Stop button, checked between batches
+let isRunning = false;
+
+/**
+ * Progress for an in-flight or interrupted chapter is saved on the course
+ * document itself, under a `_genProgress` field. This survives the tool
+ * being closed, both Groq keys failing, or the Stop button — so the next
+ * time you hit "Generate" for that chapter it picks up from nextOrder
+ * instead of starting over or duplicating lessons.
+ */
+async function saveProgress(courseId, progress) {
+  try {
+    await db.collection('courses').doc(courseId).update({ _genProgress: progress });
+  } catch (e) {
+    logLine('  (warning: could not save resume progress: ' + e.message + ')', 'err');
+  }
+}
+
+async function clearProgress(courseId) {
+  try {
+    await db.collection('courses').doc(courseId).update({ _genProgress: firebase.firestore.FieldValue.delete() });
+  } catch (e) {
+    // non-fatal
+  }
+}
+
+// Pre-filled so you don't have to paste these every time you open this tool.
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyCldWSASWc8cYKugKsbUR6AyEeUcpopeRE",
+  authDomain: "mitrademaster.firebaseapp.com",
+  projectId: "mitrademaster",
+  storageBucket: "mitrademaster.firebasestorage.app",
+  messagingSenderId: "206224301348",
+  appId: "1:206224301348:web:305c5c73e0cb5fa117e7b1",
+  measurementId: "G-LHSQXCH6BK"
+};
+const ADMIN_EMAIL = "admin@gmail.com";
+const ADMIN_PASSWORD = "miadmin";
+
+window.addEventListener('DOMContentLoaded', connectFirebase);
+
+function logLine(text, cls = 'info') {
+  const log = document.getElementById('log');
+  const div = document.createElement('div');
+  div.className = 'line ' + cls;
+  div.textContent = text;
+  log.appendChild(div);
+  log.scrollTop = log.scrollHeight;
+}
+
+async function connectFirebase() {
+  const statusEl = document.getElementById('connectStatus');
+  statusEl.style.color = 'var(--silver-dim)';
+
+  try {
+    if (!firebase.apps.length) firebase.initializeApp(FIREBASE_CONFIG);
+    auth = firebase.auth();
+    db = firebase.firestore();
+
+    await auth.signInWithEmailAndPassword(ADMIN_EMAIL, ADMIN_PASSWORD);
+
+    statusEl.textContent = 'Connected as ' + ADMIN_EMAIL;
+    statusEl.style.color = 'var(--green)';
+
+    document.getElementById('groqPanel').style.display = 'block';
+    document.getElementById('coursesPanel').style.display = 'block';
+    document.getElementById('runPanel').style.display = 'block';
+    loadCourses();
+  } catch (e) {
+    statusEl.textContent = 'Connection failed: ' + e.message + ' — check the hardcoded credentials at the top of the <script> tag in this file.';
+    statusEl.style.color = 'var(--red)';
+  }
+}
+
+async function loadCourses() {
+  const snap = await db.collection('courses').orderBy('order').get();
+  coursesCache = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+  // Fetch existing lesson counts + titles for each course, so the prompt
+  // can tell Groq exactly what's already covered and ask for something new.
+  for (const c of coursesCache) {
+    const lessonsSnap = await db.collection('courses').doc(c.id).collection('lessons').get();
+    c.existingLessonCount = lessonsSnap.size;
+    c.existingOrders = lessonsSnap.docs.map(d => d.data().order || 0);
+    c.existingTitles = lessonsSnap.docs
+      .map(d => d.data().title || d.data().titleUrdu || '')
+      .filter(t => t.length > 0);
+  }
+
+  renderCourses();
+}
+
+function renderCourses() {
+  const list = document.getElementById('coursesList');
+  if (coursesCache.length === 0) {
+    list.innerHTML = '<div class="empty">No courses found. Create chapters first in admin.html, then come back here.</div>';
+    return;
+  }
+  list.innerHTML = coursesCache.map(c => {
+    const resumeInfo = c._genProgress
+      ? ` · <span style="color:#ffc107;">⏸ resumable: ${c._genProgress.writtenThisCourse}/${c._genProgress.totalCount} done</span>`
+      : '';
+    return `
+    <div class="course-row ${selectedCourseIds.has(c.id) ? 'selected' : ''}" id="row-${c.id}">
+      <input type="checkbox" ${selectedCourseIds.has(c.id) ? 'checked' : ''} onchange="toggleCourse('${c.id}', this.checked)" />
+      <div>
+        <div class="title">${c.title}</div>
+        <div class="meta">${c.level || 'beginner'} · order ${c.order ?? '—'} · ${c.existingLessonCount} existing lesson(s)${resumeInfo}</div>
+      </div>
+      <span class="badge pending" id="status-${c.id}">${c._genProgress ? 'paused' : 'pending'}</span>
+    </div>
+  `;
+  }).join('');
+}
+
+function toggleCourse(id, checked) {
+  if (checked) selectedCourseIds.add(id); else selectedCourseIds.delete(id);
+  document.getElementById('row-' + id).classList.toggle('selected', checked);
+}
+
+function selectAllCourses(select) {
+  selectedCourseIds = select ? new Set(coursesCache.map(c => c.id)) : new Set();
+  renderCourses();
+}
+
+function setStatus(courseId, text, cls) {
+  const el = document.getElementById('status-' + courseId);
+  if (el) { el.textContent = text; el.className = 'badge ' + cls; }
+}
+
+let activeKeyIndex = 0; // 0 = key 1, 1 = key 2
+
+function getGroqKeys() {
+  const key1 = document.getElementById('groqKey').value.trim();
+  const key2 = document.getElementById('groqKey2').value.trim();
+  return [key1, key2].filter(k => k.length > 0);
+}
+
+/**
+ * Calls Groq with automatic handling of rate limits: on a 429, it waits
+ * for a cooldown and retries with the SAME key; if a second key is
+ * configured, it also alternates keys between attempts so one key's limit
+ * doesn't block progress while it cools down. Never gives up — keeps
+ * retrying until it succeeds, since a partially-generated course looks
+ * broken to students.
+ */
+// After this many consecutive rate-limit/server-error failures across all
+// available keys, we treat it as "both keys are dead right now" and give
+// up on THIS batch (throwing a special error) instead of retrying forever —
+// the caller saves progress and pauses so nothing is lost.
+const MAX_CONSECUTIVE_FAILURES = 8;
+
+async function callGroqWithRetry(prompt, onWaitMessage, shouldStop) {
+  const keys = getGroqKeys();
+  if (keys.length === 0) throw new Error('No Groq API key provided');
+
+  let attempt = 0;
+  let consecutiveFailures = 0;
+  while (true) {
+    if (shouldStop && shouldStop()) {
+      const err = new Error('Stopped by user');
+      err.isStop = true;
+      throw err;
+    }
+
+    attempt++;
+    const key = keys[activeKeyIndex % keys.length];
+    try {
+      const result = await callGroq(key, prompt);
+      return result;
+    } catch (e) {
+      const msg = e.message || '';
+      const isRateLimit = msg.includes('429') || msg.toLowerCase().includes('rate limit');
+      const isServerError = msg.includes('500') || msg.includes('503');
+
+      if (isRateLimit || isServerError) {
+        consecutiveFailures++;
+        if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
+          const err = new Error('All Groq key(s) are failing repeatedly (rate-limited or down) — pausing here so progress is not lost.');
+          err.isKeysExhausted = true;
+          throw err;
+        }
+        if (keys.length > 1) {
+          activeKeyIndex = (activeKeyIndex + 1) % keys.length;
+          onWaitMessage('Rate limit hit — switching to the other Groq key and retrying...');
+          await new Promise(r => setTimeout(r, 1500));
+          continue;
+        }
+        const waitSeconds = isRateLimit ? 20 : 8;
+        onWaitMessage('Rate limit hit — waiting ' + waitSeconds + 's before retrying (attempt ' + attempt + ')...');
+        await new Promise(r => setTimeout(r, waitSeconds * 1000));
+        continue;
+      }
+
+      // Non-rate-limit error (bad JSON, etc.) — let the caller's batch
+      // retry loop handle it rather than looping forever here.
+      throw e;
+    }
+  }
+}
+
+async function callGroq(apiKey, prompt) {
+  const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': 'Bearer ' + apiKey,
+    },
+    body: JSON.stringify({
+      model: 'openai/gpt-oss-120b',
+      messages: [
+        { role: 'system', content: 'You are a trading education curriculum writer. You output ONLY valid JSON, nothing else — no markdown fences, no preamble.' },
+        { role: 'user', content: prompt },
+      ],
+      temperature: 0.5,
+      max_tokens: 2000,
+    }),
+  });
+
+  if (!res.ok) {
+    const errText = await res.text();
+    throw new Error('Groq API error (' + res.status + '): ' + errText.slice(0, 200));
+  }
+  const data = await res.json();
+  const finishReason = data.choices[0].finish_reason;
+  let content = data.choices[0].message.content.trim();
+  content = content.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/```\s*$/i, '');
+
+  try {
+    return JSON.parse(content);
+  } catch (e) {
+    // The response was likely cut off mid-string (finish_reason: "length")
+    // before it could close properly. Recover whatever complete lesson
+    // objects we can instead of losing the whole batch.
+    const recovered = recoverPartialJsonArray(content);
+    if (recovered.length > 0) {
+      const note = finishReason === 'length'
+        ? ' (response was cut off — recovered ' + recovered.length + ' complete lesson(s) out of the requested count)'
+        : ' (recovered ' + recovered.length + ' complete lesson(s) after a parse error)';
+      recovered._recoveryNote = note;
+      return recovered;
+    }
+    throw new Error('Could not parse or recover any lessons from the response: ' + e.message);
+  }
+}
+
+/**
+ * Attempts to salvage complete {...} objects from a JSON array string that
+ * failed to parse (usually because generation was truncated mid-string).
+ * Walks the text tracking brace depth and string state, and collects every
+ * top-level object that closes cleanly before the cutoff point.
+ */
+function recoverPartialJsonArray(text) {
+  const results = [];
+  let depth = 0;
+  let objStart = -1;
+  let inString = false;
+  let escapeNext = false;
+
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+
+    if (escapeNext) { escapeNext = false; continue; }
+    if (ch === '\\' && inString) { escapeNext = true; continue; }
+    if (ch === '"') { inString = !inString; continue; }
+    if (inString) continue;
+
+    if (ch === '{') {
+      if (depth === 0) objStart = i;
+      depth++;
+    } else if (ch === '}') {
+      depth--;
+      if (depth === 0 && objStart !== -1) {
+        const candidate = text.slice(objStart, i + 1);
+        try {
+          results.push(JSON.parse(candidate));
+        } catch (e) {
+          // This object itself was malformed — skip it, keep scanning
+        }
+        objStart = -1;
+      }
+    }
+  }
+  return results;
+}
+
+function buildPrompt(course, startOrder, batchCount, langMode) {
+  const langInstruction = langMode === 'both'
+    ? 'For each lesson, provide BOTH an English version (title, contentText) AND an Urdu version (titleUrdu, contentTextUrdu). The Urdu must be a real translation/adaptation, not transliteration.'
+    : langMode === 'ur'
+      ? 'Provide ONLY Urdu fields: titleUrdu and contentTextUrdu. Leave title and contentText as empty strings.'
+      : 'Provide ONLY English fields: title and contentText. Leave titleUrdu and contentTextUrdu as empty strings.';
+
+  // Tell Groq exactly which topics already exist in this chapter so it
+  // picks up where the curriculum left off instead of repeating itself.
+  const coveredList = (course.existingTitles && course.existingTitles.length > 0)
+    ? course.existingTitles.map((t, i) => (i + 1) + '. ' + t).join('\n')
+    : '(none yet — this is the first lesson in this chapter)';
+
+  const noRepeatInstruction = `These topics are ALREADY published in this chapter — do NOT repeat, rename-and-repeat, or write a near-duplicate of any of them:\n${coveredList}\n\nWrite the NEXT topic(s) in a logical teaching order that build on what's already covered above, moving the student forward to a genuinely new concept they haven't been taught yet in this chapter.`;
+
+  return `You are a warm, encouraging trading teacher writing lesson ${startOrder} for the chapter "${course.title}" (level: ${course.level || 'beginner'}, description: "${course.description || ''}") in a beginner trading education app.
+
+${noRepeatInstruction}
+
+Write exactly ${batchCount} lesson(s), each teaching ONE clear concept. Write like a friendly teacher explaining it directly to a student who has never traded before — simple words, short sentences, a relatable everyday analogy where it helps, and a couple of well-placed emojis (in the title and sprinkled naturally in the text — not overdone, no emoji spam). Make the student feel "oh, I actually get this now!" by the end.
+
+Structure each lesson as 2-3 short paragraphs (separated by \\n):
+1. Hook the idea with a simple, relatable explanation or analogy.
+2. Explain the core concept clearly.
+3. A short, encouraging takeaway or "why this matters" closer.
+
+Keep total body text to 90-150 words per lesson — short and punchy, not a wall of text. Do not give specific buy/sell trade instructions or predict market direction — this is educational content about concepts, not trading signals.
+
+${langInstruction}
+
+Return ONLY a JSON array (no other text, no markdown) with exactly ${batchCount} object(s), each shaped like:
+{"title": "string with an emoji", "titleUrdu": "string with an emoji", "contentText": "string", "contentTextUrdu": "string", "order": ${startOrder}}
+
+If ${batchCount} is more than 1, increment "order" by 1 for each lesson starting at ${startOrder}. Keep every string SHORT and make sure the JSON is complete and valid — this is critical.`;
+}
+
+function stopGeneration() {
+  stopRequested = true;
+  logLine('Stop requested — finishing the current batch, then pausing (progress will be saved)...', 'info');
+  document.getElementById('stopBtn').disabled = true;
+}
+
+async function runGeneration() {
+  const keys = getGroqKeys();
+  if (keys.length === 0) { logLine('Please enter at least one Groq API key first.', 'err'); return; }
+  if (selectedCourseIds.size === 0) { logLine('Select at least one chapter first.', 'err'); return; }
+
+  const totalCountSetting = parseInt(document.getElementById('lessonsPerChapter').value || '8');
+  const langMode = document.getElementById('langMode').value;
+  const replaceExisting = document.getElementById('replaceExisting').checked;
+  const BATCH_SIZE = 2; // small batches = short responses = no truncation
+
+  stopRequested = false;
+  isRunning = true;
+  document.getElementById('runBtn').disabled = true;
+  document.getElementById('stopBtn').style.display = 'inline-block';
+  document.getElementById('stopBtn').disabled = false;
+  document.getElementById('resumeNote').style.display = 'none';
+
+  logLine('Starting generation for ' + selectedCourseIds.size + ' chapter(s), ' + BATCH_SIZE + ' lessons per request, ' + keys.length + ' Groq key(s) available...', 'info');
+
+  let stoppedEarly = false;
+
+  for (const courseId of selectedCourseIds) {
+    if (stopRequested) { stoppedEarly = true; break; }
+
+    const course = coursesCache.find(c => c.id === courseId);
+    if (!course) continue;
+
+    setStatus(courseId, 'running', 'running');
+
+    try {
+      // Resume support: if this chapter has saved progress and the user
+      // hasn't asked to replace-existing, pick up exactly where it left off.
+      const saved = course._genProgress;
+      let nextOrder, writtenThisCourse, totalCount;
+
+      if (replaceExisting && course.existingLessonCount > 0) {
+        logLine('→ ' + course.title + ': removing ' + course.existingLessonCount + ' existing lesson(s)...', 'info');
+        const oldLessonsSnap = await db.collection('courses').doc(courseId).collection('lessons').get();
+        await Promise.all(oldLessonsSnap.docs.map(d => d.ref.delete()));
+        course.existingLessonCount = 0;
+        course.existingOrders = [];
+        course.existingTitles = [];
+        await clearProgress(courseId);
+        course._genProgress = null;
+      }
+
+      if (!replaceExisting && saved && saved.langMode === langMode) {
+        nextOrder = saved.nextOrder;
+        writtenThisCourse = saved.writtenThisCourse;
+        totalCount = saved.totalCount;
+        logLine('→ ' + course.title + ': resuming saved progress (' + writtenThisCourse + '/' + totalCount + ' already done)...', 'info');
+      } else {
+        nextOrder = course.existingOrders.length > 0 ? Math.max(...course.existingOrders) + 1 : 1;
+        writtenThisCourse = 0;
+        totalCount = totalCountSetting;
+      }
+
+      let pausedThisCourse = false;
+
+      // Keeps going until the full target is reached, the user hits Stop,
+      // or both Groq keys are repeatedly failing (rate-limited/down).
+      while (writtenThisCourse < totalCount) {
+        if (stopRequested) {
+          await saveProgress(courseId, { nextOrder, writtenThisCourse, totalCount, langMode });
+          logLine('⏸ ' + course.title + ': paused by user at ' + writtenThisCourse + '/' + totalCount + ' — progress saved, resume anytime.', 'info');
+          setStatus(courseId, 'paused' /* falls through to default badge styling */, 'pending');
+          course._genProgress = { nextOrder, writtenThisCourse, totalCount, langMode };
+          stoppedEarly = true;
+          pausedThisCourse = true;
+          break;
+        }
+
+        const remaining = totalCount - writtenThisCourse;
+        const batchCount = Math.min(BATCH_SIZE, remaining);
+
+        logLine('→ ' + course.title + ': lesson ' + nextOrder + ' (' + (writtenThisCourse + 1) + '-' + (writtenThisCourse + batchCount) + ' of ' + totalCount + ')...', 'info');
+
+        try {
+          const prompt = buildPrompt(course, nextOrder, batchCount, langMode);
+          const lessons = await callGroqWithRetry(
+            prompt,
+            (msg) => logLine('  ⏳ ' + msg, 'info'),
+            () => stopRequested
+          );
+
+          if (!Array.isArray(lessons) || lessons.length === 0) {
+            throw new Error('Empty or invalid response for this batch');
+          }
+
+          for (const lesson of lessons) {
+            await db.collection('courses').doc(courseId).collection('lessons').add({
+              courseId: courseId,
+              title: lesson.title || '',
+              titleUrdu: lesson.titleUrdu || '',
+              contentText: lesson.contentText || '',
+              contentTextUrdu: lesson.contentTextUrdu || '',
+              youtubeVideoId: '',
+              pdfUrl: '',
+              order: lesson.order || nextOrder,
+            });
+            nextOrder++;
+            writtenThisCourse++;
+            course.existingLessonCount++;
+            const newTitle = lesson.title || lesson.titleUrdu || '';
+            if (newTitle) course.existingTitles.push(newTitle);
+          }
+
+          // Save progress after every successful batch, not just on
+          // pause/failure — so even a browser crash mid-chapter is safe.
+          await saveProgress(courseId, { nextOrder, writtenThisCourse, totalCount, langMode });
+
+          logLine('  ✓ batch published (' + lessons.length + ' lesson' + (lessons.length > 1 ? 's' : '') + ')', 'ok');
+        } catch (batchError) {
+          if (batchError.isStop) {
+            await saveProgress(courseId, { nextOrder, writtenThisCourse, totalCount, langMode });
+            logLine('⏸ ' + course.title + ': paused by user at ' + writtenThisCourse + '/' + totalCount + ' — progress saved, resume anytime.', 'info');
+            course._genProgress = { nextOrder, writtenThisCourse, totalCount, langMode };
+            setStatus(courseId, 'pending', 'pending');
+            stoppedEarly = true;
+            pausedThisCourse = true;
+            break;
+          }
+
+          if (batchError.isKeysExhausted) {
+            await saveProgress(courseId, { nextOrder, writtenThisCourse, totalCount, langMode });
+            logLine('⏸ ' + course.title + ': ' + batchError.message + ' Progress saved at ' + writtenThisCourse + '/' + totalCount + ' — add a working key and click Generate again to resume.', 'err');
+            course._genProgress = { nextOrder, writtenThisCourse, totalCount, langMode };
+            setStatus(courseId, 'error', 'error');
+            pausedThisCourse = true;
+            break;
+          }
+
+          logLine('  ✗ batch error: ' + batchError.message + ' — retrying this batch...', 'err');
+          await new Promise(r => setTimeout(r, 2000));
+          // Loop continues, retrying the same nextOrder/batchCount — never abandons the chapter.
+        }
+      }
+
+      if (!pausedThisCourse) {
+        await clearProgress(courseId);
+        course._genProgress = null;
+        logLine('✓ ' + course.title + ': completed, ' + writtenThisCourse + ' lessons published', 'ok');
+        setStatus(courseId, 'done', 'done');
+      }
+    } catch (e) {
+      logLine('✗ ' + course.title + ': ' + e.message, 'err');
+      setStatus(courseId, 'error', 'error');
+    }
+
+    if (stopRequested) { stoppedEarly = true; break; }
+  }
+
+  isRunning = false;
+  document.getElementById('stopBtn').style.display = 'none';
+  document.getElementById('runBtn').disabled = false;
+
+  if (stoppedEarly) {
+    logLine('Stopped. Progress for paused chapter(s) is saved in Firebase — click Generate again anytime to resume exactly where it left off.', 'info');
+    document.getElementById('resumeNote').style.display = 'block';
+    document.getElementById('resumeNote').textContent = '⏸ Some chapters are paused with saved progress. Click "Generate" again to resume them.';
+  } else {
+    logLine('All done.', 'info');
+  }
+  renderCourses();
+}
+</script>
+</body>
+</html>
