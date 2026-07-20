@@ -20,6 +20,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.mitv.trademaster.data.model.Course
 import com.mitv.trademaster.ui.theme.*
+import kotlinx.coroutines.launch
 
 private sealed class Tab(val route: String, val label: String, val labelUr: String, val icon: androidx.compose.ui.graphics.vector.ImageVector) {
     object Home : Tab("home", "Home", "ہوم", Icons.Filled.Home)
@@ -40,6 +41,19 @@ fun MainShellScreen(language: String, onLanguageChanged: (String) -> Unit, onSig
     var pendingResumeLessonId by remember { mutableStateOf<String?>(null) }
     var showMoreSheet by remember { mutableStateOf(false) }
     var moreDestination by remember { mutableStateOf<String?>(null) }
+
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val sessionRepo = remember { com.mitv.trademaster.data.SessionRepository(context) }
+    val session by sessionRepo.session.collectAsState(initial = com.mitv.trademaster.data.SessionState())
+    val scope = rememberCoroutineScope()
+    // Shown once, the very first time a new user reaches the main shell.
+    // Starts as "already seen" (true) so it never flashes on screen before
+    // the real persisted value loads in; only flips to show the tour once
+    // we've confirmed from disk that this device genuinely hasn't seen it.
+    var showTour by remember { mutableStateOf(false) }
+    LaunchedEffect(session.hasSeenTour) {
+        if (!session.hasSeenTour) showTour = true
+    }
 
     LaunchedEffect(initialDeepLink) {
         when (initialDeepLink) {
@@ -155,6 +169,16 @@ fun MainShellScreen(language: String, onLanguageChanged: (String) -> Unit, onSig
             language = language,
             onDismiss = { showMoreSheet = false },
             onSelect = { dest -> moreDestination = dest; showMoreSheet = false }
+        )
+    }
+
+    if (showTour) {
+        AppTourOverlay(
+            language = language,
+            onFinished = {
+                showTour = false
+                scope.launch { sessionRepo.markTourSeen() }
+            }
         )
     }
 }

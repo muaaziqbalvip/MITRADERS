@@ -20,6 +20,7 @@ data class SessionState(
     val religionAsked: Boolean = false,
     val isMuslim: Boolean = false,
     val quizPassedCourseIds: Set<String> = emptySet(),
+    val hasSeenTour: Boolean = false,
 )
 
 class SessionRepository(private val context: Context) {
@@ -33,6 +34,7 @@ class SessionRepository(private val context: Context) {
         val RELIGION_ASKED = booleanPreferencesKey("religion_asked")
         val IS_MUSLIM = booleanPreferencesKey("is_muslim")
         val QUIZ_PASSED_COURSES = stringSetPreferencesKey("quiz_passed_courses")
+        val HAS_SEEN_TOUR = booleanPreferencesKey("has_seen_tour")
     }
 
     val session: Flow<SessionState> = context.sessionStore.data.map { prefs ->
@@ -48,6 +50,7 @@ class SessionRepository(private val context: Context) {
             religionAsked = prefs[Keys.RELIGION_ASKED] ?: false,
             isMuslim = prefs[Keys.IS_MUSLIM] ?: false,
             quizPassedCourseIds = prefs[Keys.QUIZ_PASSED_COURSES] ?: emptySet(),
+            hasSeenTour = prefs[Keys.HAS_SEEN_TOUR] ?: false,
         )
     }
 
@@ -102,5 +105,10 @@ class SessionRepository(private val context: Context) {
             val current = prefs[Keys.QUIZ_PASSED_COURSES] ?: emptySet()
             prefs[Keys.QUIZ_PASSED_COURSES] = current + courseId
         }
+    }
+
+    /** Marks the one-time app walkthrough as seen, so it never shows again for this device. */
+    suspend fun markTourSeen() {
+        context.sessionStore.edit { prefs -> prefs[Keys.HAS_SEEN_TOUR] = true }
     }
 }
