@@ -1,0 +1,75 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ---- Admins collection: list of admin UIDs, managed manually in console ----
+    // Create a doc at admins/{yourAdminUid} with any field (e.g. {role: "admin"})
+    // for each person who should have admin panel access.
+    function isAdmin() {
+      return request.auth != null &&
+             exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+
+    // ---- Students: a user can read/write only their own profile; admins can read/write all ----
+    match /students/{uid} {
+      allow read: if request.auth != null && (request.auth.uid == uid || isAdmin());
+      allow write: if request.auth != null && (request.auth.uid == uid || isAdmin());
+    }
+
+    // ---- Courses & lessons: readable by any signed-in user, writable only by admins ----
+    match /courses/{courseId} {
+      allow read: if request.auth != null;
+      allow write: if isAdmin();
+
+      match /lessons/{lessonId} {
+        allow read: if request.auth != null;
+        allow write: if isAdmin();
+      }
+
+      // ---- Course quiz: generated once by the admin panel (via a special
+      // Groq key that never ships in the app), students only ever read it.
+      match /quiz/{quizDocId} {
+        allow read: if request.auth != null;
+        allow write: if isAdmin();
+      }
+    }
+
+    // ---- Payment submissions: a user can create/read their own; admins can read/update all ----
+    match /payments/{paymentId} {
+      allow create: if request.auth != null && request.resource.data.uid == request.auth.uid;
+      allow read: if request.auth != null && (resource.data.uid == request.auth.uid || isAdmin());
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // ---- Chat: a user can read/write only their own chat thread; admins can read/write all ----
+    match /chats/{uid}/messages/{messageId} {
+      allow read: if request.auth != null && (request.auth.uid == uid || isAdmin());
+      allow create: if request.auth != null && (request.auth.uid == uid || isAdmin());
+    }
+
+    // ---- Config: readable by any signed-in user (needed for QR/price/Groq key/update info), writable only by admins ----
+    match /config/{docId} {
+      allow read: if request.auth != null && docId != 'quizGenerator';
+      allow write: if isAdmin();
+    }
+
+    // ---- Quiz generator key: admin-only in both directions. This key is
+    // used exclusively from the admin panel to call Groq when generating a
+    // course quiz, and must never be readable by student app instances. ----
+    match /config/quizGenerator {
+      allow read, write: if isAdmin();
+    }
+
+    // ---- Announcements: readable by any signed-in user, writable only by admins ----
+    match /announcements/{announcementId} {
+      allow read: if request.auth != null;
+      allow write: if isAdmin();
+    }
+
+    // ---- Admins collection itself: only readable/writable via Firebase Console (no client access) ----
+    match /admins/{adminUid} {
+      allow read, write: if false;
+    }
+  }
+}
