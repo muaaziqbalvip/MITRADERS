@@ -273,17 +273,23 @@ class OverlayBubbleService : Service() {
         signalLabel.text = "  Reading screen…"
         CoroutineScope(Dispatchers.Default).launch {
             var frame: Bitmap? = null
-            repeat(20) {
-                delay(250)
+            // 48 x 250ms = up to 12 seconds max, but we exit as soon as a
+            // frame actually arrives instead of always waiting the full
+            // window. Devices with aggressive background throttling
+            // (ColorOS/MIUI/etc) can take several seconds to actually
+            // deliver the first captured frame even after the capture
+            // session is technically "created".
+            for (i in 0 until 48) {
                 frame = ScreenCaptureService.latestFrame
-                if (frame != null) return@repeat
+                if (frame != null) break
+                delay(250)
             }
             captureBtn.post { captureBtn.isEnabled = true }
             if (frame != null) {
                 analyzeBitmap(frame!!, signalDot, signalLabel, captureBtn)
             } else {
                 signalLabel.post {
-                    signalLabel.text = "  Couldn't read screen. If this keeps happening, check your phone's battery/autostart settings for this app."
+                    signalLabel.text = "  Couldn't read screen. Go to phone Settings → Apps → MI Trade Master → Battery, and allow \"Allow background activity\" / turn off battery optimization for this app, then try again."
                 }
             }
         }

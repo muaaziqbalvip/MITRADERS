@@ -74,7 +74,6 @@ class ScreenCaptureService : Service() {
             mediaProjection?.registerCallback(projectionCallback, handler)
             try {
                 setUpVirtualDisplay()
-                isActive.value = true
             } catch (e: Exception) {
                 // Capture setup failed (e.g. device-specific display quirk) —
                 // don't leave a half-initialized, permanently-stuck session.
@@ -121,6 +120,16 @@ class ScreenCaptureService : Service() {
                 image = reader.acquireLatestImage()
                 if (image != null) {
                     latestFrame = imageToBitmap(image)
+                    // isActive only flips to true once a REAL frame has landed —
+                    // not merely when the projection/session was created. On
+                    // devices with aggressive background throttling (MIUI,
+                    // ColorOS, etc), the session can be created but the OS can
+                    // delay or drop the first several frames, which previously
+                    // left latestFrame null while callers assumed capture was
+                    // already working.
+                    if (!isActive.value) {
+                        isActive.value = true
+                    }
                 }
             } catch (e: Exception) {
                 // Dropped frame — non-fatal, the next tick will refresh latestFrame.

@@ -24,7 +24,13 @@ object GroqChatClient {
 
     private const val ENDPOINT = "https://api.groq.com/openai/v1/chat/completions"
     private const val TEXT_MODEL = "llama-3.1-8b-instant"          // fast text-only model
-    private const val VISION_MODEL = "meta-llama/llama-4-scout-17b-16e-instruct" // supports image input
+    // NOTE: meta-llama/llama-4-scout-17b-16e-instruct was DEPRECATED by Groq
+    // (decommissioned) — using it made every image-upload request fail
+    // silently from the chat's point of view. qwen/qwen3.6-27b is Groq's
+    // current generally-available vision-capable model as of mid-2026.
+    // If Groq changes their lineup again, check
+    // https://console.groq.com/docs/vision for the current model id.
+    private const val VISION_MODEL = "qwen/qwen3.6-27b" // supports image input
 
     private val client = OkHttpClient.Builder()
         .connectTimeout(20, TimeUnit.SECONDS)
