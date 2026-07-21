@@ -33,7 +33,14 @@ private sealed class Tab(val route: String, val label: String, val labelUr: Stri
 private val tabs = listOf(Tab.Home, Tab.Analyzer, Tab.Learn, Tab.Practice, Tab.More)
 
 @Composable
-fun MainShellScreen(language: String, onLanguageChanged: (String) -> Unit, onSignedOut: () -> Unit, initialDeepLink: String? = null) {
+fun MainShellScreen(
+    language: String,
+    onLanguageChanged: (String) -> Unit,
+    onSignedOut: () -> Unit,
+    initialDeepLink: String? = null,
+    updateInfo: com.mitv.trademaster.update.UpdateInfo? = null,
+    onDismissUpdateBanner: () -> Unit = {},
+) {
     val navController = rememberNavController()
     var selectedCourse by remember { mutableStateOf<Course?>(null) }
     var showQuizForCourse by remember { mutableStateOf<Course?>(null) }
@@ -68,6 +75,19 @@ fun MainShellScreen(language: String, onLanguageChanged: (String) -> Unit, onSig
 
     Scaffold(
         containerColor = BgBlack,
+        topBar = {
+            val backStackEntry by navController.currentBackStackEntryAsState()
+            val currentRoute = backStackEntry?.destination?.route
+            val activeTab = if (moreDestination != null) Tab.More else tabs.firstOrNull { it.route == currentRoute }
+            val headerTitle = when {
+                moreDestination == "chat" -> if (language == "ur") "سپورٹ چیٹ" else "Support Chat"
+                moreDestination == "islamic" -> if (language == "ur") "روحانی گوشہ" else "Spiritual Corner"
+                moreDestination == "account" -> if (language == "ur") "اکاؤنٹ" else "Account"
+                moreDestination == "settings" -> if (language == "ur") "سیٹنگز" else "Settings"
+                else -> activeTab?.let { if (language == "ur") it.labelUr else it.label } ?: "MI Trade Master"
+            }
+            com.mitv.trademaster.ui.components.AppHeaderBar(title = headerTitle)
+        },
         bottomBar = {
             val backStackEntry by navController.currentBackStackEntryAsState()
             val currentRoute = backStackEntry?.destination?.route
@@ -116,7 +136,11 @@ fun MainShellScreen(language: String, onLanguageChanged: (String) -> Unit, onSig
             }
         }
     ) { padding ->
-        Box(modifier = Modifier.padding(padding).background(BgBlack).fillMaxSize()) {
+        Column(modifier = Modifier.padding(padding).background(BgBlack).fillMaxSize()) {
+            if (updateInfo != null && !updateInfo.forceUpdate) {
+                UpdateAvailableBanner(updateInfo = updateInfo, language = language, onDismiss = onDismissUpdateBanner)
+            }
+            Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
             if (moreDestination != null) {
                 when (moreDestination) {
                     "chat" -> ChatSupportScreen(language)
@@ -161,6 +185,7 @@ fun MainShellScreen(language: String, onLanguageChanged: (String) -> Unit, onSig
                     composable(Tab.Practice.route) { PracticeScreen(language) }
                 }
             }
+            }
         }
     }
 
@@ -180,6 +205,38 @@ fun MainShellScreen(language: String, onLanguageChanged: (String) -> Unit, onSig
                 scope.launch { sessionRepo.markTourSeen() }
             }
         )
+    }
+}
+
+@Composable
+private fun UpdateAvailableBanner(updateInfo: com.mitv.trademaster.update.UpdateInfo, language: String, onDismiss: () -> Unit) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(BrandGreen.copy(alpha = 0.14f))
+            .padding(horizontal = 16.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(Icons.Filled.SystemUpdate, contentDescription = null, tint = BrandGreen, modifier = Modifier.size(18.dp))
+        Spacer(Modifier.width(10.dp))
+        Column(Modifier.weight(1f)) {
+            Text(
+                if (language == "ur") "نیا ورژن ${updateInfo.latestVersionName} دستیاب ہے" else "New version ${updateInfo.latestVersionName} available",
+                color = Color.White, fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold
+            )
+        }
+        TextButton(onClick = {
+            if (updateInfo.apkUrl.isNotBlank()) {
+                val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(updateInfo.apkUrl))
+                context.startActivity(intent)
+            }
+        }) {
+            Text(if (language == "ur") "اپڈیٹ کریں" else "Update", color = BrandGreen, fontSize = 12.5.sp, fontWeight = FontWeight.Bold)
+        }
+        IconButton(onClick = onDismiss, modifier = Modifier.size(28.dp)) {
+            Icon(Icons.Filled.Close, contentDescription = null, tint = BrandSilverDim, modifier = Modifier.size(16.dp))
+        }
     }
 }
 

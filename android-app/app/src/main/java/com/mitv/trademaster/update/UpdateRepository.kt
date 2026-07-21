@@ -27,6 +27,41 @@ class UpdateRepository {
     private val db = FirebaseFirestore.getInstance()
 
     /**
+     * Live-updating version check: emits a new UpdateInfo (or null) the
+     * instant the admin changes config/app_version in Firestore — no app
+     * restart needed. Use this instead of the one-shot [checkForUpdate]
+     * wherever the app is already open and should react in real time.
+     */
+    fun observeUpdateInfo(currentVersionCode: Int): kotlinx.coroutines.flow.Flow<UpdateInfo?> = kotlinx.coroutines.flow.flow {
+        val channel = kotlinx.coroutines.channels.Channel<UpdateInfo?>(kotlinx.coroutines.channels.Channel.CONFLATED)
+        val registration = db.collection("config").document("app_version")
+            .addSnapshotListener { snap, _ ->
+                val info = try {
+                    if (snap == null || !snap.exists()) null
+                    else {
+                        val latestCode = (snap.getLong("latestVersionCode") ?: return@addSnapshotListener).toInt()
+                        if (latestCode <= currentVersionCode) null
+                        else UpdateInfo(
+                            latestVersionCode = latestCode,
+                            latestVersionName = snap.getString("latestVersionName") ?: "",
+                            apkUrl = snap.getString("apkUrl") ?: "",
+                            forceUpdate = snap.getBoolean("forceUpdate") ?: false,
+                            releaseNotes = snap.getString("releaseNotes") ?: "",
+                        )
+                    }
+                } catch (e: Exception) {
+                    null
+                }
+                channel.trySend(info)
+            }
+        try {
+            for (info in channel) emit(info)
+        } finally {
+            registration.remove()
+        }
+    }
+
+    /**
      * Returns UpdateInfo only if the remote version is newer than
      * [currentVersionCode]. Returns null if up to date, not configured, or
      * on any network/parsing error (fails open — never blocks app startup

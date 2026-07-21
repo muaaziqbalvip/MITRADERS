@@ -48,6 +48,8 @@ fun AnalyzerScreen(language: String = "en") {
     var isAnalyzing by remember { mutableStateOf(false) }
     var result by remember { mutableStateOf<com.mitv.trademaster.analysis.AnalysisResult?>(null) }
     var errorMsg by remember { mutableStateOf<String?>(null) }
+    var candleIntervalInput by remember { mutableStateOf("") }
+    var tradeDurationInput by remember { mutableStateOf("") }
 
     val pickImageLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
         imageUri = uri; result = null; errorMsg = null
@@ -89,48 +91,87 @@ fun AnalyzerScreen(language: String = "en") {
 
         Spacer(Modifier.height(14.dp))
 
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            OutlinedButton(
-                onClick = { pickImageLauncher.launch("image/*") },
-                colors = ButtonDefaults.outlinedButtonColors(contentColor = BrandSilver),
-                border = androidx.compose.foundation.BorderStroke(1.dp, LineSubtle),
-                shape = RoundedCornerShape(12.dp),
-                modifier = Modifier.weight(1f)
-            ) { Text(if (language == "ur") "اسکرین شاٹ منتخب کریں" else "Select Screenshot", fontSize = 13.sp) }
+        OutlinedButton(
+            onClick = { tapFeedback(); pickImageLauncher.launch("image/*") },
+            colors = ButtonDefaults.outlinedButtonColors(contentColor = BrandSilver),
+            border = androidx.compose.foundation.BorderStroke(1.dp, LineSubtle),
+            shape = RoundedCornerShape(12.dp),
+            modifier = Modifier.fillMaxWidth()
+        ) { Text(if (language == "ur") "اسکرین شاٹ منتخب کریں" else "Select Screenshot", fontSize = 13.sp) }
 
-            Button(
-                onClick = {
-                    tapFeedback()
-                    if (imageUri == null) return@Button
-                    errorMsg = null
-                    isAnalyzing = true
-                    scope.launch {
-                        try {
-                            val bitmap = withContext(Dispatchers.IO) {
-                                context.contentResolver.openInputStream(imageUri!!)?.use { android.graphics.BitmapFactory.decodeStream(it) }
-                            }
-                            if (bitmap == null) {
-                                errorMsg = if (language == "ur") "تصویر نہیں پڑھی جا سکی" else "Could not read image"
-                            } else {
-                                val r = withContext(Dispatchers.Default) { ChartAnalyzer.analyze(bitmap) }
-                                result = r
-                                authRepo.currentUser?.uid?.let { uid -> scope.launch { runCatching { firestoreRepo.incrementAnalysesRun(uid) } } }
-                            }
-                        } catch (e: Exception) {
-                            errorMsg = (if (language == "ur") "تجزیہ ناکام: " else "Analysis failed: ") + e.message
-                        } finally {
-                            isAnalyzing = false
-                        }
-                    }
-                },
-                enabled = imageUri != null && !isAnalyzing,
-                colors = ButtonDefaults.buttonColors(containerColor = BrandGreen, contentColor = Color(0xFF04120B)),
+        Spacer(Modifier.height(16.dp))
+
+        // ---------- Time-window inputs: candle interval + trade duration ----------
+        Text(
+            if (language == "ur") "ٹائم فریم کی تفصیل (اختیاری، لیکن تجویز کے لیے تجویز کردہ)" else "Time Window (optional, but recommended for a trade suggestion)",
+            color = BrandSilverDim, fontSize = 11.sp, fontWeight = FontWeight.SemiBold
+        )
+        Spacer(Modifier.height(8.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            OutlinedTextField(
+                value = candleIntervalInput,
+                onValueChange = { v -> candleIntervalInput = v.filter { it.isDigit() }.take(3) },
+                label = { Text(if (language == "ur") "کینڈل کتنے منٹ کی؟" else "Candle interval (min)", fontSize = 11.sp) },
+                singleLine = true,
+                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = BrandGreen, unfocusedBorderColor = LineSubtle,
+                    focusedTextColor = Color.White, unfocusedTextColor = Color.White, cursorColor = BrandGreen,
+                ),
                 shape = RoundedCornerShape(12.dp),
                 modifier = Modifier.weight(1f)
-            ) {
-                if (isAnalyzing) CircularProgressIndicator(modifier = Modifier.size(18.dp), color = Color(0xFF04120B), strokeWidth = 2.dp)
-                else Text(if (language == "ur") "تجزیہ کریں" else "Analyze", fontSize = 13.sp, fontWeight = FontWeight.Bold)
-            }
+            )
+            OutlinedTextField(
+                value = tradeDurationInput,
+                onValueChange = { v -> tradeDurationInput = v.filter { it.isDigit() }.take(3) },
+                label = { Text(if (language == "ur") "ٹریڈ کتنے منٹ کی؟" else "Trade duration (min)", fontSize = 11.sp) },
+                singleLine = true,
+                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = BrandGreen, unfocusedBorderColor = LineSubtle,
+                    focusedTextColor = Color.White, unfocusedTextColor = Color.White, cursorColor = BrandGreen,
+                ),
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier.weight(1f)
+            )
+        }
+
+        Spacer(Modifier.height(14.dp))
+
+        Button(
+            onClick = {
+                tapFeedback()
+                if (imageUri == null) return@Button
+                errorMsg = null
+                isAnalyzing = true
+                val candleInterval = candleIntervalInput.toIntOrNull()
+                val tradeDuration = tradeDurationInput.toIntOrNull()
+                scope.launch {
+                    try {
+                        val bitmap = withContext(Dispatchers.IO) {
+                            context.contentResolver.openInputStream(imageUri!!)?.use { android.graphics.BitmapFactory.decodeStream(it) }
+                        }
+                        if (bitmap == null) {
+                            errorMsg = if (language == "ur") "تصویر نہیں پڑھی جا سکی" else "Could not read image"
+                        } else {
+                            val r = withContext(Dispatchers.Default) { ChartAnalyzer.analyze(bitmap, candleInterval, tradeDuration) }
+                            result = r
+                            authRepo.currentUser?.uid?.let { uid -> scope.launch { runCatching { firestoreRepo.incrementAnalysesRun(uid) } } }
+                        }
+                    } catch (e: Exception) {
+                        errorMsg = (if (language == "ur") "تجزیہ ناکام: " else "Analysis failed: ") + e.message
+                    } finally {
+                        isAnalyzing = false
+                    }
+                }
+            },
+            enabled = imageUri != null && !isAnalyzing,
+            colors = ButtonDefaults.buttonColors(containerColor = BrandGreen, contentColor = Color(0xFF04120B)),
+            shape = RoundedCornerShape(12.dp),
+            modifier = Modifier.fillMaxWidth().height(50.dp)
+        ) {
+            if (isAnalyzing) CircularProgressIndicator(modifier = Modifier.size(18.dp), color = Color(0xFF04120B), strokeWidth = 2.dp)
+            else Text(if (language == "ur") "تجزیہ کریں" else "Analyze", fontSize = 14.sp, fontWeight = FontWeight.Bold)
         }
 
         errorMsg?.let {
@@ -141,11 +182,78 @@ fun AnalyzerScreen(language: String = "en") {
         result?.let { r ->
             Spacer(Modifier.height(18.dp))
             LeanCard(r, language)
+            r.tradeSuggestion?.let { suggestion ->
+                Spacer(Modifier.height(14.dp))
+                TradeSuggestionCard(suggestion, language)
+            }
             Spacer(Modifier.height(14.dp))
             DetailedSignalPanel(r, language)
         }
 
         Spacer(Modifier.height(60.dp))
+    }
+}
+
+@Composable
+private fun TradeSuggestionCard(s: com.mitv.trademaster.analysis.TradeSuggestion, language: String) {
+    val (color, icon, dirLabel) = when (s.direction) {
+        Direction.UP -> Triple(BrandGreen, Icons.Filled.TrendingUp, if (language == "ur") "اوپر" else "UP")
+        Direction.DOWN -> Triple(BrandRed, Icons.Filled.TrendingDown, if (language == "ur") "نیچے" else "DOWN")
+        Direction.NEUTRAL -> Triple(BrandSilverDim, Icons.Filled.TrendingFlat, if (language == "ur") "غیر واضح" else "UNCLEAR")
+    }
+
+    Card(
+        colors = CardDefaults.cardColors(containerColor = color.copy(alpha = 0.1f)),
+        shape = RoundedCornerShape(20.dp),
+        border = androidx.compose.foundation.BorderStroke(1.dp, color.copy(alpha = 0.35f)),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(Modifier.padding(20.dp)) {
+            Text(
+                if (language == "ur") "اگلے ${s.tradeDurationMinutes} منٹ کے لیے تجویز" else "Suggestion for the Next ${s.tradeDurationMinutes} Minutes",
+                color = BrandSilverDim, fontSize = 10.sp, fontWeight = FontWeight.SemiBold
+            )
+            Spacer(Modifier.height(10.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(modifier = Modifier.size(52.dp).clip(CircleShape).background(color.copy(alpha = 0.16f)), contentAlignment = Alignment.Center) {
+                    Icon(icon, contentDescription = null, tint = color, modifier = Modifier.size(28.dp))
+                }
+                Spacer(Modifier.width(14.dp))
+                Column {
+                    Text(dirLabel, color = color, fontSize = 22.sp, fontWeight = FontWeight.Black)
+                    Text(
+                        (if (language == "ur") "اعتماد: " else "Confidence: ") + "${s.confidencePercent}%",
+                        color = BrandSilver, fontSize = 13.sp, fontWeight = FontWeight.SemiBold
+                    )
+                }
+                Spacer(Modifier.weight(1f))
+                Box(
+                    modifier = Modifier.background(color.copy(alpha = 0.14f), RoundedCornerShape(14.dp)).padding(horizontal = 10.dp, vertical = 6.dp)
+                ) {
+                    Text(
+                        "${s.candleIntervalMinutes}m ${if (language == "ur") "کینڈل" else "candle"}",
+                        color = color, fontSize = 10.sp, fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+            Spacer(Modifier.height(14.dp))
+            LinearProgressIndicator(
+                progress = { s.confidencePercent / 100f },
+                color = color, trackColor = LineSubtle,
+                modifier = Modifier.fillMaxWidth().height(8.dp).clip(RoundedCornerShape(4.dp))
+            )
+            Spacer(Modifier.height(14.dp))
+            Text(
+                if (language == "ur") s.reasoningUrdu else s.reasoning,
+                color = BrandSilverDim, fontSize = 12.sp, lineHeight = 18.sp
+            )
+            Spacer(Modifier.height(10.dp))
+            Text(
+                if (language == "ur") "یہ ایک تعلیمی تخمینہ ہے، ضمانت نہیں۔ اپنا رسک خود سنبھالیں۔"
+                else "This is an educational estimate, not a guarantee. Manage your own risk.",
+                color = BrandSilverDim.copy(alpha = 0.6f), fontSize = 10.sp, lineHeight = 14.sp
+            )
+        }
     }
 }
 

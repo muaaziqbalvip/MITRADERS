@@ -49,6 +49,29 @@ fun AppRoot(initialDeepLink: String? = null) {
     LaunchedEffect(session.language) { language = session.language }
 
     var pendingUpdateInfo by remember { mutableStateOf<com.mitv.trademaster.update.UpdateInfo?>(null) }
+    var dismissedVersionCode by remember { mutableStateOf<Int?>(null) }
+
+    // Runs for the entire app session (not just at splash): if the admin
+    // publishes a new version while the user is already inside the app,
+    // this reacts within a second or two via Firestore's live listener —
+    // no restart needed. Force-update pushes straight to the blocking
+    // screen; optional updates surface as a dismissible banner instead.
+    val updateRepo = remember { com.mitv.trademaster.update.UpdateRepository() }
+    val currentVersionCode = remember {
+        try { context.packageManager.getPackageInfo(context.packageName, 0).let {
+            if (android.os.Build.VERSION.SDK_INT >= 28) it.longVersionCode.toInt() else @Suppress("DEPRECATION") it.versionCode
+        } } catch (e: Exception) { 0 }
+    }
+    LaunchedEffect(Unit) {
+        updateRepo.observeUpdateInfo(currentVersionCode).collect { info ->
+            pendingUpdateInfo = info
+            if (info != null && info.forceUpdate) {
+                navController.navigate(Routes.UPDATE_REQUIRED) {
+                    launchSingleTop = true
+                }
+            }
+        }
+    }
 
     NavHost(navController = navController, startDestination = Routes.SPLASH) {
         composable(Routes.SPLASH) {
@@ -122,6 +145,8 @@ fun AppRoot(initialDeepLink: String? = null) {
                     navController.navigate(Routes.LOGIN) { popUpTo(0) { inclusive = true } }
                 },
                 initialDeepLink = initialDeepLink,
+                updateInfo = pendingUpdateInfo?.takeIf { it.latestVersionCode != dismissedVersionCode },
+                onDismissUpdateBanner = { dismissedVersionCode = pendingUpdateInfo?.latestVersionCode },
             )
         }
     }

@@ -34,6 +34,25 @@ data class AnalysisResult(
     val leanStatement: String = "",
     val disclaimer: String = "This is an educational pattern observation, not a guaranteed " +
         "outcome. Markets can move against any pattern. Always manage your own risk.",
+    val tradeSuggestion: TradeSuggestion? = null,
+)
+
+/**
+ * A time-window-scoped recommendation: "for the next [tradeMinutes] minutes,
+ * given candles set at [candleIntervalMinutes] each, the lean is [direction]
+ * with [confidencePercent]% confidence." Built on top of the same pattern
+ * analysis above — this just reframes it against the two numbers the user
+ * provides (their chart's candle interval, and how long they intend to
+ * hold the trade), because momentum read from a 1-minute chart means
+ * something different than the same slope read from a 15-minute chart.
+ */
+data class TradeSuggestion(
+    val direction: Direction,
+    val confidencePercent: Int,
+    val candleIntervalMinutes: Int,
+    val tradeDurationMinutes: Int,
+    val reasoning: String,
+    val reasoningUrdu: String,
 )
 
 private data class Candle(
@@ -45,7 +64,14 @@ private data class Candle(
 
 object ChartAnalyzer {
 
-    fun analyze(bitmap: Bitmap): AnalysisResult {
+    fun analyze(bitmap: Bitmap): AnalysisResult = analyze(bitmap, candleIntervalMinutes = null, tradeDurationMinutes = null)
+
+    /**
+     * Same pattern analysis as the base [analyze], plus an optional
+     * time-scoped [TradeSuggestion] when the user has told us their chart's
+     * candle interval and how long they plan to hold the trade.
+     */
+    fun analyze(bitmap: Bitmap, candleIntervalMinutes: Int?, tradeDurationMinutes: Int?): AnalysisResult {
         val candles = segmentCandles(bitmap)
 
         if (candles.size < 3) {
@@ -63,6 +89,7 @@ object ChartAnalyzer {
         val (direction, strength) = trendFromCandles(candles)
         val pattern = detectPattern(candles)
         val srNote = supportResistanceNote(candles, bitmap.height)
+        val volatility = recentVolatility(candles)
 
         var confidence = when {
             strength > 0.6 -> Confidence.HIGH
@@ -96,6 +123,10 @@ object ChartAnalyzer {
             Direction.NEUTRAL -> "The visible structure doesn't show a clear directional lean right now — price looks range-bound or the signals are mixed."
         }
 
+        val tradeSuggestion = if (candleIntervalMinutes != null && tradeDurationMinutes != null && candleIntervalMinutes > 0 && tradeDurationMinutes > 0) {
+            buildTradeSuggestion(direction, strength, volatility, srNote, candleIntervalMinutes, tradeDurationMinutes)
+        } else null
+
         return AnalysisResult(
             direction = direction,
             confidence = confidence,
@@ -106,7 +137,102 @@ object ChartAnalyzer {
             trendStrengthPercent = (strength * 100).toInt().coerceIn(0, 100),
             signals = signals,
             leanStatement = leanStatement,
+            tradeSuggestion = tradeSuggestion,
         )
+    }
+
+    /**
+     * Turns the raw trend/volatility read into a suggestion scoped to the
+     * user's specific time window. The core idea:
+     *   - More trade-duration relative to candle-interval (i.e. the trade
+     *     spans many candles) means today's momentum has more candles left
+     *     to either confirm or fade — so confidence is discounted the
+     *     longer the hold relative to the candle size.
+     *   - High recent volatility relative to the trend strength lowers
+     *     confidence (choppy conditions are less predictable than a clean
+     *     trend).
+     *   - Very short intervals (1-2 min) are inherently noisier than
+     *     longer ones, so they get an extra small discount — this mirrors
+     *     the real-world fact that 1-minute candle "signals" are far less
+     *     reliable than 15-minute ones, without pretending either is a
+     *     guarantee.
+     */
+    private fun buildTradeSuggestion(
+        direction: Direction,
+        strength: Double,
+        volatility: Double,
+        srNote: String,
+        candleIntervalMinutes: Int,
+        tradeDurationMinutes: Int,
+    ): TradeSuggestion {
+        val candlesInWindow = (tradeDurationMinutes.toDouble() / candleIntervalMinutes).coerceAtLeast(0.5)
+
+        // Base confidence from trend strength, 0-100 scale.
+        var confidencePercent = (strength * 100).coerceIn(0.0, 100.0)
+
+        // Discount for how many candles the trade window spans — a
+        // suggestion for "the next 1 candle" is inherently more grounded
+        // in what we just measured than "the next 10 candles".
+        val windowDiscount = when {
+            candlesInWindow <= 1.5 -> 1.0
+            candlesInWindow <= 3.0 -> 0.85
+            candlesInWindow <= 6.0 -> 0.7
+            else -> 0.55
+        }
+        confidencePercent *= windowDiscount
+
+        // Discount for choppiness: high volatility relative to trend
+        // strength means the recent move is less "clean".
+        val choppinessDiscount = if (volatility > 0.5 && strength < 0.5) 0.8 else 1.0
+        confidencePercent *= choppinessDiscount
+
+        // Very short candle intervals are noisier in general.
+        val intervalDiscount = when {
+            candleIntervalMinutes <= 1 -> 0.85
+            candleIntervalMinutes <= 2 -> 0.92
+            else -> 1.0
+        }
+        confidencePercent *= intervalDiscount
+
+        // Support/resistance proximity nudges confidence in the direction
+        // it favors, same logic as the base analyzer.
+        if (srNote.contains("support") && direction == Direction.UP) confidencePercent = (confidencePercent + 8).coerceAtMost(95.0)
+        if (srNote.contains("resistance") && direction == Direction.DOWN) confidencePercent = (confidencePercent + 8).coerceAtMost(95.0)
+
+        val finalDirection = if (confidencePercent < 35.0) Direction.NEUTRAL else direction
+        val finalConfidence = confidencePercent.toInt().coerceIn(5, 95)
+
+        val windowLabel = if (candlesInWindow <= 1.05) "the next candle" else "the next ${"%.0f".format(candlesInWindow)} candles"
+        val reasoning = when (finalDirection) {
+            Direction.UP -> "Reading a $candleIntervalMinutes-minute chart for a $tradeDurationMinutes-minute window ($windowLabel), momentum and structure lean upward. Confidence is discounted for how far this window extends past what was actually measured."
+            Direction.DOWN -> "Reading a $candleIntervalMinutes-minute chart for a $tradeDurationMinutes-minute window ($windowLabel), momentum and structure lean downward. Confidence is discounted for how far this window extends past what was actually measured."
+            Direction.NEUTRAL -> "For this $tradeDurationMinutes-minute window on a $candleIntervalMinutes-minute chart, the signal isn't strong enough to lean either way with reasonable confidence — conditions look choppy or the window is long relative to what was measured."
+        }
+        val reasoningUrdu = when (finalDirection) {
+            Direction.UP -> "$candleIntervalMinutes منٹ کے چارٹ کو $tradeDurationMinutes منٹ کی ونڈو کے لیے پڑھتے ہوئے، رجحان اوپر کی طرف ہے۔ اعتماد کو اس بنیاد پر کم کیا گیا ہے کہ یہ ونڈو ناپے گئے وقت سے کتنی آگے ہے۔"
+            Direction.DOWN -> "$candleIntervalMinutes منٹ کے چارٹ کو $tradeDurationMinutes منٹ کی ونڈو کے لیے پڑھتے ہوئے، رجحان نیچے کی طرف ہے۔ اعتماد کو اس بنیاد پر کم کیا گیا ہے کہ یہ ونڈو ناپے گئے وقت سے کتنی آگے ہے۔"
+            Direction.NEUTRAL -> "$candleIntervalMinutes منٹ کے چارٹ پر اس $tradeDurationMinutes منٹ کی ونڈو کے لیے سگنل کسی بھی طرف مناسب اعتماد کے ساتھ کافی مضبوط نہیں ہے۔"
+        }
+
+        return TradeSuggestion(
+            direction = finalDirection,
+            confidencePercent = finalConfidence,
+            candleIntervalMinutes = candleIntervalMinutes,
+            tradeDurationMinutes = tradeDurationMinutes,
+            reasoning = reasoning,
+            reasoningUrdu = reasoningUrdu,
+        )
+    }
+
+    /** Rough volatility proxy: how much candle ranges vary relative to their average, over the recent window. */
+    private fun recentVolatility(candles: List<Candle>): Double {
+        val recent = candles.takeLast(min(candles.size, 15))
+        if (recent.size < 3) return 0.0
+        val ranges = recent.map { (it.bottom - it.top).toDouble() }
+        val avg = ranges.average().coerceAtLeast(1.0)
+        val variance = ranges.map { (it - avg) * (it - avg) }.average()
+        val stdDev = Math.sqrt(variance)
+        return (stdDev / avg).coerceIn(0.0, 2.0)
     }
 
     private fun segmentCandles(bitmap: Bitmap): List<Candle> {
