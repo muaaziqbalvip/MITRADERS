@@ -111,3 +111,19 @@ data class CourseQuiz(
     val questions: List<QuizQuestion> = emptyList(),
     val generatedAt: Long = 0L,
 )
+
+/** A student's personal trading journal entry — stored per-user in Firestore under students/{uid}/journal. */
+data class JournalEntry(
+    val id: String = "",
+    val uid: String = "",
+    val pair: String = "",
+    val direction: String = "",       // buy | sell
+    val entryPrice: String = "",
+    val exitPrice: String = "",
+    val lotSize: String = "",
+    val outcome: String = "",         // win | loss | breakeven | open
+    val profitLoss: String = "",
+    val notes: String = "",
+    val emotionTag: String = "",      // confident | anxious | fomo | disciplined | revenge | neutral
+    val timestamp: Long = 0L,
+)

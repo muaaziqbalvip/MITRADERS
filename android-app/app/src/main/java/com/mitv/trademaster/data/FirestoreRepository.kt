@@ -136,6 +136,24 @@ class FirestoreRepository {
     // Payment submissions
     // ------------------------------------------------------------------
 
+    // ------------------------------------------------------------------
+    // Trading journal (personal, per-student)
+    // ------------------------------------------------------------------
+
+    suspend fun addJournalEntry(entry: com.mitv.trademaster.data.model.JournalEntry) {
+        db.collection("students").document(entry.uid).collection("journal").add(entry).await()
+    }
+
+    suspend fun getJournalEntries(uid: String): List<com.mitv.trademaster.data.model.JournalEntry> {
+        val snap = db.collection("students").document(uid).collection("journal")
+            .orderBy("timestamp", com.google.firebase.firestore.Query.Direction.DESCENDING).get().await()
+        return snap.documents.mapNotNull { it.toObject<com.mitv.trademaster.data.model.JournalEntry>()?.copy(id = it.id) }
+    }
+
+    suspend fun deleteJournalEntry(uid: String, entryId: String) {
+        db.collection("students").document(uid).collection("journal").document(entryId).delete().await()
+    }
+
     suspend fun submitPayment(submission: PaymentSubmission) {
         db.collection("payments").add(submission).await()
     }

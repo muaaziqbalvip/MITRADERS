@@ -59,12 +59,13 @@ class AuthRepository(private val context: Context) {
         }
     }
 
-    suspend fun sendPasswordReset(email: String): AuthResult {
+    /** Returns a simple Result instead of AuthResult since there's no user object involved — just "did the email send". */
+    suspend fun sendPasswordReset(email: String): Result<Unit> {
         return try {
             auth.sendPasswordResetEmail(email).await()
-            AuthResult.Success(auth.currentUser ?: return AuthResult.Error("Reset email sent"))
+            Result.success(Unit)
         } catch (e: Exception) {
-            AuthResult.Error(e.message ?: "Could not send reset email")
+            Result.failure(Exception(e.message ?: "Could not send reset email"))
         }
     }
 

@@ -49,6 +49,7 @@ fun LoginScreen(onAuthenticated: () -> Unit) {
     var verificationId by remember { mutableStateOf<String?>(null) }
     var isLoading by remember { mutableStateOf(false) }
     var errorMsg by remember { mutableStateOf<String?>(null) }
+    var showForgotPassword by remember { mutableStateOf(false) }
 
     val webClientId = context.getString(R.string.default_web_client_id)
 
@@ -133,6 +134,13 @@ fun LoginScreen(onAuthenticated: () -> Unit) {
                 ) {
                     if (isLoading) CircularProgressIndicator(modifier = Modifier.size(20.dp), color = Color(0xFF04120B), strokeWidth = 2.dp)
                     else Text(if (mode == AuthMode.SIGN_IN) "Sign In" else "Create Account", fontWeight = FontWeight.Bold)
+                }
+
+                if (mode == AuthMode.SIGN_IN) {
+                    Spacer(Modifier.height(12.dp))
+                    TextButton(onClick = { tapFeedback(); showForgotPassword = true }, modifier = Modifier.align(Alignment.End)) {
+                        Text("Forgot Password?", color = BrandSilverDim, fontSize = 12.5.sp)
+                    }
                 }
             }
 
@@ -245,6 +253,99 @@ fun LoginScreen(onAuthenticated: () -> Unit) {
         }
 
         Spacer(Modifier.height(40.dp))
+    }
+
+    if (showForgotPassword) {
+        ForgotPasswordDialog(
+            authRepo = authRepo,
+            scope = scope,
+            onDismiss = { showForgotPassword = false }
+        )
+    }
+}
+
+@Composable
+private fun ForgotPasswordDialog(authRepo: AuthRepository, scope: kotlinx.coroutines.CoroutineScope, onDismiss: () -> Unit) {
+    var resetEmail by remember { mutableStateOf("") }
+    var isSending by remember { mutableStateOf(false) }
+    var sentSuccessfully by remember { mutableStateOf(false) }
+    var errorMsg by remember { mutableStateOf<String?>(null) }
+
+    androidx.compose.ui.window.Dialog(onDismissRequest = onDismiss) {
+        Surface(shape = RoundedCornerShape(20.dp), color = PanelDark) {
+            Column(modifier = Modifier.padding(24.dp).width(320.dp)) {
+                if (sentSuccessfully) {
+                    Box(modifier = Modifier.size(56.dp).background(BrandGreen.copy(alpha = 0.14f), RoundedCornerShape(16.dp)), contentAlignment = Alignment.Center) {
+                        Icon(Icons.Filled.CheckCircle, contentDescription = null, tint = BrandGreen, modifier = Modifier.size(28.dp))
+                    }
+                    Spacer(Modifier.height(16.dp))
+                    Text("Check Your Email", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        "If an account exists for $resetEmail, a password reset link has been sent. Check your inbox (and spam folder).",
+                        color = BrandSilverDim, fontSize = 12.5.sp, lineHeight = 18.sp
+                    )
+                    Spacer(Modifier.height(20.dp))
+                    Button(
+                        onClick = onDismiss,
+                        colors = ButtonDefaults.buttonColors(containerColor = BrandGreen, contentColor = Color(0xFF04120B)),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text("Done", fontWeight = FontWeight.Bold) }
+                } else {
+                    Text("Reset Your Password", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        "Enter the email linked to your account and we'll send you a link to reset your password.",
+                        color = BrandSilverDim, fontSize = 12.5.sp, lineHeight = 18.sp
+                    )
+                    Spacer(Modifier.height(18.dp))
+                    MitvTextField(value = resetEmail, onValueChange = { resetEmail = it; errorMsg = null }, label = "Email", icon = Icons.Filled.Email, keyboardType = KeyboardType.Email)
+
+                    errorMsg?.let {
+                        Spacer(Modifier.height(8.dp))
+                        Text(it, color = BrandRed, fontSize = 11.5.sp)
+                    }
+
+                    Spacer(Modifier.height(18.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
+                        OutlinedButton(
+                            onClick = onDismiss,
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = BrandSilverDim),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, LineSubtle),
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.weight(1f)
+                        ) { Text("Cancel") }
+
+                        Button(
+                            onClick = {
+                                if (resetEmail.isBlank() || !resetEmail.contains("@")) {
+                                    errorMsg = "Enter a valid email address"
+                                    return@Button
+                                }
+                                isSending = true
+                                errorMsg = null
+                                scope.launch {
+                                    val result = authRepo.sendPasswordReset(resetEmail.trim())
+                                    isSending = false
+                                    result.fold(
+                                        onSuccess = { sentSuccessfully = true },
+                                        onFailure = { err -> errorMsg = err.message ?: "Could not send reset email" }
+                                    )
+                                }
+                            },
+                            enabled = !isSending,
+                            colors = ButtonDefaults.buttonColors(containerColor = BrandGreen, contentColor = Color(0xFF04120B)),
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            if (isSending) CircularProgressIndicator(modifier = Modifier.size(18.dp), color = Color(0xFF04120B), strokeWidth = 2.dp)
+                            else Text("Send Link", fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 

@@ -85,6 +85,9 @@ fun MainShellScreen(
                 moreDestination == "islamic" -> if (language == "ur") "روحانی گوشہ" else "Spiritual Corner"
                 moreDestination == "account" -> if (language == "ur") "اکاؤنٹ" else "Account"
                 moreDestination == "settings" -> if (language == "ur") "سیٹنگز" else "Settings"
+                moreDestination == "live_charts" -> if (language == "ur") "لائیو چارٹس" else "Live Charts"
+                moreDestination == "market_info" -> if (language == "ur") "مارکیٹ کی معلومات" else "Market Info"
+                moreDestination == "tools" -> if (language == "ur") "ٹریڈنگ ٹولز" else "Trading Tools"
                 else -> activeTab?.let { if (language == "ur") it.labelUr else it.label } ?: "MI Trade Master"
             }
             com.mitv.trademaster.ui.components.AppHeaderBar(title = headerTitle)
@@ -148,6 +151,9 @@ fun MainShellScreen(
                     "account" -> AccountScreen(language, onSignedOut)
                     "settings" -> SettingsScreen(language, onLanguageChanged)
                     "islamic" -> IslamicScreen(language)
+                    "live_charts" -> LiveChartsScreen(language)
+                    "market_info" -> MarketInfoScreen(language)
+                    "tools" -> ToolsScreen(language)
                 }
             } else {
                 NavHost(navController = navController, startDestination = Tab.Home.route) {
@@ -260,6 +266,9 @@ private fun MoreSheet(language: String, onDismiss: () -> Unit, onSelect: (String
                 color = BrandSilverDim, fontSize = 12.sp, fontWeight = FontWeight.SemiBold,
                 modifier = Modifier.padding(bottom = 14.dp)
             )
+            MoreItem(Icons.Filled.ShowChart, if (language == "ur") "لائیو چارٹس" else "Live Charts") { onSelect("live_charts") }
+            MoreItem(Icons.Filled.CalendarMonth, if (language == "ur") "مارکیٹ کی معلومات" else "Market Info") { onSelect("market_info") }
+            MoreItem(Icons.Filled.Handyman, if (language == "ur") "ٹریڈنگ ٹولز" else "Trading Tools") { onSelect("tools") }
             MoreItem(Icons.Filled.Chat, if (language == "ur") "سپورٹ چیٹ" else "Support Chat") { onSelect("chat") }
             MoreItem(Icons.Filled.AutoAwesome, if (language == "ur") "روحانی گوشہ" else "Spiritual Corner") { onSelect("islamic") }
             MoreItem(Icons.Filled.Person, if (language == "ur") "اکاؤنٹ" else "Account") { onSelect("account") }

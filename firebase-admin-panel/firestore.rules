@@ -14,6 +14,10 @@ service cloud.firestore {
     match /students/{uid} {
       allow read: if request.auth != null && (request.auth.uid == uid || isAdmin());
       allow write: if request.auth != null && (request.auth.uid == uid || isAdmin());
+
+      match /journal/{entryId} {
+        allow read, write: if request.auth != null && (request.auth.uid == uid || isAdmin());
+      }
     }
 
     // ---- Courses & lessons: readable by any signed-in user, writable only by admins ----
