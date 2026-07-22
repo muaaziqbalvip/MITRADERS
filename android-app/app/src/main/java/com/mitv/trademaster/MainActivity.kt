@@ -92,7 +92,7 @@ fun AppRoot(initialDeepLink: String? = null) {
             )
         }
         composable(Routes.UPDATE_REQUIRED) {
-            pendingUpdateInfo?.let { UpdateRequiredScreen(it) }
+            pendingUpdateInfo?.let { UpdateRequiredScreen(it, language) }
         }
         composable(Routes.LOGIN) {
             LoginScreen(

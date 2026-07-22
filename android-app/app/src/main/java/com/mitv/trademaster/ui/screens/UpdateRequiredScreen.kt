@@ -22,7 +22,7 @@ import com.mitv.trademaster.update.UpdateInfo
 import com.mitv.trademaster.ui.theme.*
 
 @Composable
-fun UpdateRequiredScreen(updateInfo: UpdateInfo) {
+fun UpdateRequiredScreen(updateInfo: UpdateInfo, language: String = "en") {
     val context = LocalContext.current
     var isDownloading by remember { mutableStateOf(false) }
     var progress by remember { mutableStateOf(0) }
@@ -46,10 +46,11 @@ fun UpdateRequiredScreen(updateInfo: UpdateInfo) {
         }
 
         Spacer(Modifier.height(24.dp))
-        Text("Update Required", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+        Text(if (language == "ur") "اپڈیٹ ضروری ہے" else "Update Required", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(8.dp))
         Text(
-            "A new version (${updateInfo.latestVersionName}) is available. Please update to continue using MI Trade Master.",
+            if (language == "ur") "نیا ورژن (${updateInfo.latestVersionName}) دستیاب ہے۔ جاری رکھنے کے لیے براہ کرم اپ ڈیٹ کریں۔"
+            else "A new version (${updateInfo.latestVersionName}) is available. Please update to continue using MI Trade Master.",
             color = BrandSilverDim, fontSize = 13.sp, textAlign = androidx.compose.ui.text.style.TextAlign.Center
         )
 
@@ -57,7 +58,7 @@ fun UpdateRequiredScreen(updateInfo: UpdateInfo) {
             Spacer(Modifier.height(20.dp))
             Card(colors = CardDefaults.cardColors(containerColor = PanelDark), shape = RoundedCornerShape(14.dp), modifier = Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp)) {
-                    Text("What's new", color = BrandSilverDim, fontSize = 11.sp)
+                    Text(if (language == "ur") "کیا نیا ہے" else "What's new", color = BrandSilverDim, fontSize = 11.sp)
                     Spacer(Modifier.height(6.dp))
                     Text(updateInfo.releaseNotes, color = BrandSilver, fontSize = 12.sp, lineHeight = 18.sp)
                 }
@@ -72,7 +73,7 @@ fun UpdateRequiredScreen(updateInfo: UpdateInfo) {
                 colors = ButtonDefaults.buttonColors(containerColor = BrandGreen, contentColor = Color(0xFF04120B)),
                 shape = RoundedCornerShape(12.dp),
                 modifier = Modifier.fillMaxWidth().height(52.dp)
-            ) { Text("Install Update", fontWeight = FontWeight.Bold) }
+            ) { Text(if (language == "ur") "اپڈیٹ انسٹال کریں" else "Install Update", fontWeight = FontWeight.Bold) }
         } else if (isDownloading) {
             LinearProgressIndicator(
                 progress = { progress / 100f },
@@ -80,12 +81,12 @@ fun UpdateRequiredScreen(updateInfo: UpdateInfo) {
                 modifier = Modifier.fillMaxWidth().height(8.dp)
             )
             Spacer(Modifier.height(10.dp))
-            Text("Downloading... $progress%", color = BrandSilverDim, fontSize = 12.sp)
+            Text((if (language == "ur") "ڈاؤن لوڈ ہو رہا ہے... " else "Downloading... ") + "$progress%", color = BrandSilverDim, fontSize = 12.sp)
         } else {
             Button(
                 onClick = {
                     if (updateInfo.apkUrl.isBlank()) {
-                        errorMsg = "Update link not configured. Please contact support."
+                        errorMsg = if (language == "ur") "اپڈیٹ لنک سیٹ نہیں ہے۔ براہ کرم سپورٹ سے رابطہ کریں۔" else "Update link not configured. Please contact support."
                         return@Button
                     }
                     isDownloading = true
@@ -99,7 +100,7 @@ fun UpdateRequiredScreen(updateInfo: UpdateInfo) {
                             if (file != null) {
                                 downloadedFile = file
                             } else {
-                                errorMsg = "Download failed. Please check your connection and try again."
+                                errorMsg = if (language == "ur") "ڈاؤن لوڈ ناکام ہو گیا۔ اپنا کنکشن چیک کریں اور دوبارہ کوشش کریں۔" else "Download failed. Please check your connection and try again."
                             }
                         }
                     )
@@ -107,7 +108,7 @@ fun UpdateRequiredScreen(updateInfo: UpdateInfo) {
                 colors = ButtonDefaults.buttonColors(containerColor = BrandGreen, contentColor = Color(0xFF04120B)),
                 shape = RoundedCornerShape(12.dp),
                 modifier = Modifier.fillMaxWidth().height(52.dp)
-            ) { Text("Download Update", fontWeight = FontWeight.Bold) }
+            ) { Text(if (language == "ur") "اپڈیٹ ڈاؤن لوڈ کریں" else "Download Update", fontWeight = FontWeight.Bold) }
         }
 
         errorMsg?.let {
@@ -117,7 +118,8 @@ fun UpdateRequiredScreen(updateInfo: UpdateInfo) {
 
         Spacer(Modifier.height(20.dp))
         Text(
-            "Your account, progress, and settings are kept — this only updates the app itself.",
+            if (language == "ur") "آپ کا اکاؤنٹ، پیش رفت اور سیٹنگز محفوظ رہیں گی — یہ صرف ایپ کو اپڈیٹ کرتا ہے۔"
+            else "Your account, progress, and settings are kept — this only updates the app itself.",
             color = BrandSilverDim.copy(alpha = 0.7f), fontSize = 10.sp, textAlign = androidx.compose.ui.text.style.TextAlign.Center
         )
     }

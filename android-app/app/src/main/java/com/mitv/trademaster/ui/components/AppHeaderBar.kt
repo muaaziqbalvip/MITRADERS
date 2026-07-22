@@ -41,51 +41,57 @@ import com.mitv.trademaster.ui.theme.LineSubtle
 fun AppHeaderBar(title: String, subtitle: String? = null) {
     val infiniteTransition = rememberInfiniteTransition(label = "headerGlow")
     val glowAlpha by infiniteTransition.animateFloat(
-        initialValue = 0.25f,
-        targetValue = 0.55f,
+        initialValue = 0.18f,
+        targetValue = 0.4f,
         animationSpec = infiniteRepeatable(animation = tween(2200), repeatMode = RepeatMode.Reverse),
         label = "glowAlpha"
     )
-    val iconScale by infiniteTransition.animateFloat(
-        initialValue = 0.98f,
-        targetValue = 1.03f,
+    val bannerScale by infiniteTransition.animateFloat(
+        initialValue = 0.99f,
+        targetValue = 1.015f,
         animationSpec = infiniteRepeatable(animation = tween(2200), repeatMode = RepeatMode.Reverse),
-        label = "iconScale"
+        label = "bannerScale"
     )
 
     Column(modifier = Modifier.background(BgBlack)) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 14.dp),
-            verticalAlignment = Alignment.CenterVertically
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp, vertical = 10.dp),
+            contentAlignment = Alignment.Center
         ) {
-            Box(contentAlignment = Alignment.Center) {
-                // Soft glow behind the icon, breathing slowly — gives the
-                // header a "premium/alive" feel without being distracting.
-                Box(
-                    modifier = Modifier
-                        .size(46.dp)
-                        .graphicsLayer { alpha = glowAlpha }
-                        .background(BrandGreen.copy(alpha = 0.35f), RoundedCornerShape(14.dp))
-                )
-                Image(
-                    painter = painterResource(id = R.drawable.header_icon),
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier
-                        .size(40.dp)
-                        .scale(iconScale)
-                        .clip(RoundedCornerShape(12.dp))
-                )
-            }
-
-            Spacer(Modifier.width(12.dp))
-
-            Column {
-                Text(title, color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.Bold)
-                if (!subtitle.isNullOrBlank()) {
-                    Text(subtitle, color = BrandSilverDim, fontSize = 11.sp)
-                }
-            }
+            // Soft ambient glow behind the whole banner, breathing slowly.
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(54.dp)
+                    .graphicsLayer { alpha = glowAlpha }
+                    .background(BrandGreen.copy(alpha = 0.4f), RoundedCornerShape(16.dp))
+            )
+            // The banner is a wide 21:9 image (full "MI TRADE MASTER" logo
+            // lockup) — it must be shown with Fit, never Crop, or it gets
+            // sliced down to an unrecognizable sliver of the artwork.
+            Image(
+                painter = painterResource(id = R.drawable.header_icon),
+                contentDescription = null,
+                contentScale = ContentScale.Fit,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(50.dp)
+                    .scale(bannerScale)
+                    .clip(RoundedCornerShape(12.dp))
+            )
+        }
+        if (!subtitle.isNullOrBlank()) {
+            Text(
+                subtitle, color = BrandSilverDim, fontSize = 11.sp,
+                modifier = Modifier.padding(horizontal = 18.dp, vertical = 0.dp)
+            )
+        } else if (title.isNotBlank()) {
+            Text(
+                title, color = BrandSilverDim, fontSize = 11.sp, fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.padding(horizontal = 18.dp, vertical = 0.dp)
+            )
         }
         HorizontalDivider(color = LineSubtle)
     }

@@ -14,6 +14,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
@@ -210,7 +211,8 @@ fun MainShellScreen(
 
 @Composable
 private fun UpdateAvailableBanner(updateInfo: com.mitv.trademaster.update.UpdateInfo, language: String, onDismiss: () -> Unit) {
-    val context = androidx.compose.ui.platform.LocalContext.current
+    var showUpdateDialog by remember { mutableStateOf(false) }
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -226,16 +228,24 @@ private fun UpdateAvailableBanner(updateInfo: com.mitv.trademaster.update.Update
                 color = Color.White, fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold
             )
         }
-        TextButton(onClick = {
-            if (updateInfo.apkUrl.isNotBlank()) {
-                val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(updateInfo.apkUrl))
-                context.startActivity(intent)
-            }
-        }) {
+        TextButton(onClick = { showUpdateDialog = true }) {
             Text(if (language == "ur") "اپڈیٹ کریں" else "Update", color = BrandGreen, fontSize = 12.5.sp, fontWeight = FontWeight.Bold)
         }
         IconButton(onClick = onDismiss, modifier = Modifier.size(28.dp)) {
             Icon(Icons.Filled.Close, contentDescription = null, tint = BrandSilverDim, modifier = Modifier.size(16.dp))
+        }
+    }
+
+    if (showUpdateDialog) {
+        Dialog(onDismissRequest = { showUpdateDialog = false }) {
+            Surface(shape = RoundedCornerShape(24.dp), color = BgBlack, modifier = Modifier.fillMaxWidth()) {
+                Box {
+                    UpdateRequiredScreen(updateInfo = updateInfo, language = language)
+                    IconButton(onClick = { showUpdateDialog = false }, modifier = Modifier.align(Alignment.TopEnd).padding(8.dp)) {
+                        Icon(Icons.Filled.Close, contentDescription = null, tint = BrandSilverDim)
+                    }
+                }
+            }
         }
     }
 }

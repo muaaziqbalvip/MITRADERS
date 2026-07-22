@@ -42,6 +42,14 @@ private data class DemoCandle(
     val bodySize get() = kotlin.math.abs(close - open)
 }
 
+private data class TradeLogEntry(
+    val direction: Boolean, // true = up guess, false = down guess
+    val won: Boolean,
+    val entryPrice: Float,
+    val exitPrice: Float,
+    val amount: Float,
+)
+
 private enum class GameState { SETUP, PLAYING, FINISHED }
 
 // Selectable timeframes — how long each candle takes to form (like a real demo platform).
@@ -63,6 +71,9 @@ fun PracticeScreen(language: String) {
     var formingCandle by remember { mutableStateOf<DemoCandle?>(null) }
     var wins by remember { mutableStateOf(0) }
     var losses by remember { mutableStateOf(0) }
+    var currentStreak by remember { mutableStateOf(0) } // positive = win streak, negative = loss streak
+    var bestWinStreak by remember { mutableStateOf(0) }
+    var tradeHistory by remember { mutableStateOf<List<TradeLogEntry>>(emptyList()) }
     var lastExplanation by remember { mutableStateOf<String?>(null) }
     var isSettling by remember { mutableStateOf(false) } // brief "trade executing" pause after candle closes
     var pendingGuess by remember { mutableStateOf<Boolean?>(null) }
@@ -82,6 +93,7 @@ fun PracticeScreen(language: String) {
                 candles = generateInitialCandles()
                 formingCandle = null
                 wins = 0; losses = 0; lastExplanation = null
+                currentStreak = 0; bestWinStreak = 0; tradeHistory = emptyList()
                 pendingGuess = null
                 entryPrice = null
                 gameState = GameState.PLAYING
@@ -128,8 +140,16 @@ fun PracticeScreen(language: String) {
         val correct = if (guess != null && entry != null) guess == (close >= entry) else null
         val final = DemoCandle(open, close, high, low, tradeResult = correct, entryPrice = entry)
         if (guess != null && correct != null) {
-            if (correct) { wins++; balance += tradeAmount; soundManager.playSuccess() } else { losses++; balance -= tradeAmount; soundManager.playError() }
+            if (correct) {
+                wins++; balance += tradeAmount; soundManager.playSuccess()
+                currentStreak = if (currentStreak >= 0) currentStreak + 1 else 1
+                if (currentStreak > bestWinStreak) bestWinStreak = currentStreak
+            } else {
+                losses++; balance -= tradeAmount; soundManager.playError()
+                currentStreak = if (currentStreak <= 0) currentStreak - 1 else -1
+            }
             lastExplanation = explainCandle(final, language, entry)
+            entry?.let { e -> tradeHistory = (tradeHistory + TradeLogEntry(guess, correct, e, close, tradeAmount)).takeLast(20) }
         } else {
             lastExplanation = null
         }
@@ -192,6 +212,27 @@ fun PracticeScreen(language: String) {
             ScoreCard(Modifier.weight(1f), if (language == "ur") "ٹائم فریم" else "Timeframe", "${timeframeSeconds}s", BrandSilver)
         }
 
+        Spacer(Modifier.height(10.dp))
+
+        val totalTrades = wins + losses
+        val winRate = if (totalTrades > 0) (wins * 100 / totalTrades) else 0
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            ScoreCard(
+                Modifier.weight(1f), if (language == "ur") "کامیابی کی شرح" else "Win Rate",
+                if (totalTrades > 0) "$winRate%" else "—",
+                if (winRate >= 50) BrandGreen else Color(0xFFE3B934)
+            )
+            ScoreCard(
+                Modifier.weight(1f), if (language == "ur") "موجودہ سلسلہ" else "Current Streak",
+                if (currentStreak == 0) "—" else if (currentStreak > 0) "🔥 $currentStreak" else "${-currentStreak}",
+                if (currentStreak > 0) BrandGreen else if (currentStreak < 0) BrandRed else BrandSilverDim
+            )
+            ScoreCard(
+                Modifier.weight(1f), if (language == "ur") "بہترین سلسلہ" else "Best Streak",
+                if (bestWinStreak > 0) "$bestWinStreak" else "—", Color(0xFFE3B934)
+            )
+        }
+
         Spacer(Modifier.height(14.dp))
 
         // ---------- Live chart with real forming candle + countdown ----------
@@ -250,6 +291,50 @@ fun PracticeScreen(language: String) {
                     Icon(Icons.Filled.Lightbulb, contentDescription = null, tint = BrandGreen, modifier = Modifier.size(16.dp))
                     Spacer(Modifier.width(10.dp))
                     Text(explanation, color = BrandSilverDim, fontSize = 11.sp, lineHeight = 16.sp)
+                }
+            }
+        }
+
+        if (tradeHistory.isNotEmpty()) {
+            Spacer(Modifier.height(20.dp))
+            Text(if (language == "ur") "حالیہ ٹریڈز" else "Recent Trades", color = BrandSilverDim, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+            Spacer(Modifier.height(8.dp))
+            Card(colors = CardDefaults.cardColors(containerColor = PanelDark), shape = RoundedCornerShape(14.dp), modifier = Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(vertical = 4.dp)) {
+                    tradeHistory.asReversed().take(8).forEachIndexed { idx, entry ->
+                        if (idx > 0) HorizontalDivider(color = LineSubtle)
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                if (entry.direction) Icons.Filled.TrendingUp else Icons.Filled.TrendingDown,
+                                contentDescription = null,
+                                tint = if (entry.direction) BrandGreen else BrandRed,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(Modifier.width(10.dp))
+                            Text(
+                                "${"%.2f".format(entry.entryPrice)} → ${"%.2f".format(entry.exitPrice)}",
+                                color = BrandSilver, fontSize = 12.sp, modifier = Modifier.weight(1f)
+                            )
+                            Text(
+                                (if (entry.won) "+" else "-") + "$${"%.0f".format(entry.amount)}",
+                                color = if (entry.won) BrandGreen else BrandRed, fontSize = 12.sp, fontWeight = FontWeight.Bold
+                            )
+                            Spacer(Modifier.width(10.dp))
+                            Box(
+                                modifier = Modifier
+                                    .background((if (entry.won) BrandGreen else BrandRed).copy(alpha = 0.14f), RoundedCornerShape(8.dp))
+                                    .padding(horizontal = 8.dp, vertical = 3.dp)
+                            ) {
+                                Text(
+                                    if (entry.won) (if (language == "ur") "جیت" else "WIN") else (if (language == "ur") "ہار" else "LOSS"),
+                                    color = if (entry.won) BrandGreen else BrandRed, fontSize = 9.sp, fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+                    }
                 }
             }
         }
