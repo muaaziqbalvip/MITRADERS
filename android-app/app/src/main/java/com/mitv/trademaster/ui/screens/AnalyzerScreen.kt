@@ -16,6 +16,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.CheckCircle
@@ -631,11 +633,11 @@ private fun NextCandlePredictorCircle(r: com.mitv.trademaster.analysis.AnalysisR
 
             if (r.detectedPatterns.isNotEmpty()) {
                 Spacer(Modifier.height(14.dp))
-                androidx.compose.foundation.lazy.LazyRow(
+                LazyRow(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    androidx.compose.foundation.lazy.items(r.detectedPatterns) { p ->
+                    items(r.detectedPatterns) { p ->
                         val pColor = when (p.nextCandleBias) {
                             Direction.UP -> BrandGreen
                             Direction.DOWN -> BrandRed
