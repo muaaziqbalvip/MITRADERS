@@ -37,7 +37,7 @@
 <img src="https://i.ibb.co/YBL6BKmF/file-00000000a1ec820899d58c8c7e3c15af.png"
      width="100%"
      alt="MI Trade Master Banner"/>
-<img src="https://i.ibb.co/YBL6BKmF/file-00000000a1ec820899d58c8c7e3c15af.png"
+<img src="https://i.ibb.co/NdPwVPq4/file-00000000d2c482089b50c0270eb913ce.png"
      width="100%"
      alt="MI Trade Master Banner"/>
 
