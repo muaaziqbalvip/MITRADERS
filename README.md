@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src=".github/assets/app_icon.png" width="120" height="120" alt="MI Trade Master App Icon" />
+<img src="https://i.ibb.co/S49RkC2t/05ed3a6c260a.png" width="120" height="120" alt="MI Trade Master App Icon" />
 
 # MI Trade Master
 
