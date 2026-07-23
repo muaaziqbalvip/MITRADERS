@@ -17,6 +17,7 @@
 [![License](https://img.shields.io/badge/License-Proprietary-red?style=flat-square)](./LICENSE)
 
 *A publisher brand of* **Muslim Islam Org**
+<img src="https://i.ibb.co/S49RkC2t/05ed3a6c260a.png" width="200" height="200" alt="MI Trade MASTER BANER" />
 
 </div>
 
