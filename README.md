@@ -1,25 +1,42 @@
+
 <div align="center">
 
-<img src="https://i.ibb.co/S49RkC2t/05ed3a6c260a.png" width="120" height="120" alt="MI Trade Master App Icon" />
+<img src="https://i.ibb.co/S49RkC2t/05ed3a6c260a.png"
+     width="140"
+     alt="MI Trade Master App Icon" />
 
-# MI Trade Master
+# 🚀 MI TRADE MASTER
 
-### Trading Education & Paper-Trading Companion App
+### 🤖 AI-Powered Trading Learning & Paper Trading Platform
 
-**v8.0.0** · Android · Powered by Firebase + Groq AI
+<p>
+<b>Learn • Analyze • Practice • Improve</b><br>
+🇵🇰 Urdu + English • AI Chart Analysis • Smart Learning
+</p>
 
-[![Platform](https://img.shields.io/badge/Platform-Android-3DDC84?style=flat-square&logo=android&logoColor=white)](#)
-[![Version](https://img.shields.io/badge/Version-8.0.0-34E39A?style=flat-square)](#)
-[![Min SDK](https://img.shields.io/badge/Min%20SDK-26-1a7a56?style=flat-square)](#)
-[![Target SDK](https://img.shields.io/badge/Target%20SDK-34-1a7a56?style=flat-square)](#)
-[![Kotlin](https://img.shields.io/badge/Kotlin-Jetpack%20Compose-7F52FF?style=flat-square&logo=kotlin&logoColor=white)](#)
-[![Firebase](https://img.shields.io/badge/Backend-Firebase-FFCA28?style=flat-square&logo=firebase&logoColor=white)](#)
-[![License](https://img.shields.io/badge/License-Proprietary-red?style=flat-square)](./LICENSE)
+<p>
+<img src="https://img.shields.io/badge/Version-v8.0.0-34E39A?style=for-the-badge"/>
+<img src="https://img.shields.io/badge/Android-8+-3DDC84?style=for-the-badge&logo=android&logoColor=white"/>
+<img src="https://img.shields.io/badge/Firebase-Backend-FFCA28?style=for-the-badge&logo=firebase&logoColor=black"/>
+<img src="https://img.shields.io/badge/Groq-AI-34E39A?style=for-the-badge"/>
+</p>
 
-*A publisher brand of* **Muslim Islam Org**
+<p>
+<img src="https://img.shields.io/badge/Jetpack%20Compose-Kotlin-7F52FF?style=for-the-badge&logo=kotlin&logoColor=white"/>
+<img src="https://img.shields.io/badge/Target%20SDK-34-34E39A?style=for-the-badge"/>
+<img src="https://img.shields.io/badge/Min%20SDK-26-0F9D58?style=for-the-badge"/>
+<img src="https://img.shields.io/badge/License-Proprietary-red?style=for-the-badge"/>
+</p>
+
+**📚 Learn Trading Professionally • 📊 Analyze Charts with AI • 🎯 Practice Without Risk**
+
+*A Publisher Brand of* **Muslim Islam Org**
+
+<br>
+
 <img src="https://i.ibb.co/YBL6BKmF/file-00000000a1ec820899d58c8c7e3c15af.png"
      width="100%"
-     alt="MI Trade Master Banner" />
+     alt="MI Trade Master Banner"/>
 
 </div>
 
