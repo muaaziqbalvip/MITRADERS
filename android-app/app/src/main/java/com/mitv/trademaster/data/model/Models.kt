@@ -28,6 +28,10 @@ data class StudentProfile(
     val lastActiveAt: Long = 0L,
     val lessonsCompleted: Int = 0,
     val analysesRun: Int = 0,
+    val practiceTradesWon: Int = 0,
+    val practiceTradesTotal: Int = 0,
+    val journalEntriesLogged: Int = 0,
+    val coursesCompletedCount: Int = 0,
 )
 
 data class Course(

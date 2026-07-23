@@ -154,7 +154,10 @@ private fun TradingJournalTab(language: String) {
             onSave = { entry ->
                 scope.launch {
                     try {
-                        withContext(Dispatchers.IO) { repo.addJournalEntry(entry.copy(uid = uid, timestamp = System.currentTimeMillis())) }
+                        withContext(Dispatchers.IO) {
+                            repo.addJournalEntry(entry.copy(uid = uid, timestamp = System.currentTimeMillis()))
+                            repo.incrementJournalEntriesLogged(uid)
+                        }
                     } catch (e: Exception) { }
                     showAddSheet = false
                     reload()

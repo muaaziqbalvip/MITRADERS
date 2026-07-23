@@ -58,6 +58,10 @@ private const val TICK_MS = 150L // how often the forming candle's live price up
 
 @Composable
 fun PracticeScreen(language: String) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val authRepo = remember { com.mitv.trademaster.data.AuthRepository(context) }
+    val firestoreRepo = remember { com.mitv.trademaster.data.FirestoreRepository() }
+    val scope = rememberCoroutineScope()
     val tapFeedback = com.mitv.trademaster.util.rememberTapFeedback()
     val soundManager = com.mitv.trademaster.util.rememberSoundManager()
     var gameState by remember { mutableStateOf(GameState.SETUP) }
@@ -147,6 +151,9 @@ fun PracticeScreen(language: String) {
             } else {
                 losses++; balance -= tradeAmount; soundManager.playError()
                 currentStreak = if (currentStreak <= 0) currentStreak - 1 else -1
+            }
+            authRepo.currentUser?.uid?.let { uid ->
+                scope.launch { runCatching { firestoreRepo.recordPracticeTradeResult(uid, correct) } }
             }
             lastExplanation = explainCandle(final, language, entry)
             entry?.let { e -> tradeHistory = (tradeHistory + TradeLogEntry(guess, correct, e, close, tradeAmount)).takeLast(20) }

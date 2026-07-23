@@ -45,6 +45,7 @@ fun QuizScreen(course: Course, language: String, onBack: () -> Unit, onPassed: (
     val context = LocalContext.current
     val repo = remember { FirestoreRepository() }
     val sessionRepo = remember { SessionRepository(context) }
+    val authRepo = remember { com.mitv.trademaster.data.AuthRepository(context) }
     val soundManager = com.mitv.trademaster.util.rememberSoundManager()
 
     var loadState by remember { mutableStateOf<QuizLoadState>(QuizLoadState.Loading) }
@@ -155,6 +156,9 @@ fun QuizScreen(course: Course, language: String, onBack: () -> Unit, onPassed: (
                             soundManager.playClick()
                             scope.launch {
                                 sessionRepo.markQuizPassed(course.id)
+                                authRepo.currentUser?.uid?.let { uid ->
+                                    runCatching { repo.incrementCoursesCompleted(uid) }
+                                }
                                 onPassed()
                             }
                         }

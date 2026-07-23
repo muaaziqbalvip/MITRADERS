@@ -283,7 +283,7 @@ private fun ForgotPasswordDialog(authRepo: AuthRepository, scope: kotlinx.corout
                     Text("Check Your Email", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
                     Spacer(Modifier.height(8.dp))
                     Text(
-                        "If an account exists for $resetEmail, a password reset link has been sent. Check your inbox (and spam folder).",
+                        "If an account exists for $resetEmail, a password reset link has been sent. It can take a few minutes to arrive — check your spam/junk folder if you don't see it soon.",
                         color = BrandSilverDim, fontSize = 12.5.sp, lineHeight = 18.sp
                     )
                     Spacer(Modifier.height(20.dp))

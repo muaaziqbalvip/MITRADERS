@@ -12,6 +12,9 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.PhotoLibrary
+import androidx.compose.material.icons.filled.Psychology
+import androidx.compose.material.icons.filled.ScreenshotMonitor
 import androidx.compose.material.icons.filled.TrendingDown
 import androidx.compose.material.icons.filled.TrendingFlat
 import androidx.compose.material.icons.filled.TrendingUp
@@ -21,6 +24,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -50,9 +54,57 @@ fun AnalyzerScreen(language: String = "en") {
     var errorMsg by remember { mutableStateOf<String?>(null) }
     var candleIntervalInput by remember { mutableStateOf("") }
     var tradeDurationInput by remember { mutableStateOf("") }
+    var capturedScreenBitmap by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
+    var isWaitingForScreenshot by remember { mutableStateOf(false) }
+
+    // While waiting for a screenshot (user just granted screen-capture
+    // permission or switched away to their chart app), poll for the next
+    // frame that lands. Stops as soon as one arrives or the screen leaves
+    // composition.
+    LaunchedEffect(isWaitingForScreenshot) {
+        if (!isWaitingForScreenshot) return@LaunchedEffect
+        repeat(40) { // up to ~20 seconds
+            kotlinx.coroutines.delay(500)
+            val frame = com.mitv.trademaster.overlay.ScreenCaptureService.latestFrame
+            if (frame != null) {
+                capturedScreenBitmap = frame
+                imageUri = null
+                result = null
+                errorMsg = null
+                isWaitingForScreenshot = false
+                return@LaunchedEffect
+            }
+        }
+        isWaitingForScreenshot = false
+    }
 
     val pickImageLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
-        imageUri = uri; result = null; errorMsg = null
+        imageUri = uri; capturedScreenBitmap = null; result = null; errorMsg = null
+    }
+
+    var pendingCameraUri by remember { mutableStateOf<Uri?>(null) }
+    val takePictureLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { success ->
+        if (success && pendingCameraUri != null) {
+            imageUri = pendingCameraUri; capturedScreenBitmap = null; result = null; errorMsg = null
+        }
+    }
+    val cameraPermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) {
+            val uri = createCameraCaptureUri(context)
+            pendingCameraUri = uri
+            takePictureLauncher.launch(uri)
+        }
+    }
+
+    fun launchCamera() {
+        val hasPermission = androidx.core.content.ContextCompat.checkSelfPermission(context, android.Manifest.permission.CAMERA) == android.content.pm.PackageManager.PERMISSION_GRANTED
+        if (hasPermission) {
+            val uri = createCameraCaptureUri(context)
+            pendingCameraUri = uri
+            takePictureLauncher.launch(uri)
+        } else {
+            cameraPermissionLauncher.launch(android.Manifest.permission.CAMERA)
+        }
     }
 
     Column(
@@ -75,7 +127,12 @@ fun AnalyzerScreen(language: String = "en") {
             modifier = Modifier.fillMaxWidth().height(200.dp).clip(RoundedCornerShape(16.dp)).background(PanelDark),
             contentAlignment = Alignment.Center
         ) {
-            if (imageUri != null) {
+            if (capturedScreenBitmap != null) {
+                androidx.compose.foundation.Image(
+                    bitmap = capturedScreenBitmap!!.asImageBitmap(), contentDescription = null,
+                    contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize()
+                )
+            } else if (imageUri != null) {
                 AsyncImage(model = imageUri, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
             } else {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -91,13 +148,72 @@ fun AnalyzerScreen(language: String = "en") {
 
         Spacer(Modifier.height(14.dp))
 
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            OutlinedButton(
+                onClick = { tapFeedback(); pickImageLauncher.launch("image/*") },
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = BrandSilver),
+                border = androidx.compose.foundation.BorderStroke(1.dp, LineSubtle),
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier.weight(1f)
+            ) {
+                Icon(Icons.Filled.PhotoLibrary, contentDescription = null, modifier = Modifier.size(16.dp))
+                Spacer(Modifier.width(6.dp))
+                Text(if (language == "ur") "گیلری" else "Gallery", fontSize = 13.sp)
+            }
+            OutlinedButton(
+                onClick = { tapFeedback(); launchCamera() },
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = BrandSilver),
+                border = androidx.compose.foundation.BorderStroke(1.dp, LineSubtle),
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier.weight(1f)
+            ) {
+                Icon(Icons.Filled.CameraAlt, contentDescription = null, modifier = Modifier.size(16.dp))
+                Spacer(Modifier.width(6.dp))
+                Text(if (language == "ur") "کیمرہ" else "Camera", fontSize = 13.sp)
+            }
+        }
+
+        Spacer(Modifier.height(10.dp))
+
         OutlinedButton(
-            onClick = { tapFeedback(); pickImageLauncher.launch("image/*") },
-            colors = ButtonDefaults.outlinedButtonColors(contentColor = BrandSilver),
-            border = androidx.compose.foundation.BorderStroke(1.dp, LineSubtle),
+            onClick = {
+                tapFeedback()
+                if (!android.provider.Settings.canDrawOverlays(context) || !com.mitv.trademaster.overlay.ScreenCaptureService.isActive.value) {
+                    val consentIntent = android.content.Intent(context, com.mitv.trademaster.overlay.ScreenCaptureConsentActivity::class.java).apply {
+                        flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK
+                    }
+                    context.startActivity(consentIntent)
+                    isWaitingForScreenshot = true
+                } else {
+                    val frame = com.mitv.trademaster.overlay.ScreenCaptureService.latestFrame
+                    if (frame != null) {
+                        capturedScreenBitmap = frame
+                        imageUri = null
+                        result = null
+                        errorMsg = null
+                    } else {
+                        isWaitingForScreenshot = true
+                    }
+                }
+            },
+            colors = ButtonDefaults.outlinedButtonColors(contentColor = BrandGreen),
+            border = androidx.compose.foundation.BorderStroke(1.dp, BrandGreenDim),
             shape = RoundedCornerShape(12.dp),
             modifier = Modifier.fillMaxWidth()
-        ) { Text(if (language == "ur") "اسکرین شاٹ منتخب کریں" else "Select Screenshot", fontSize = 13.sp) }
+        ) {
+            Icon(Icons.Filled.ScreenshotMonitor, contentDescription = null, modifier = Modifier.size(16.dp))
+            Spacer(Modifier.width(8.dp))
+            Text(if (language == "ur") "اسکرین شاٹ لیں (براہ راست)" else "Capture Screen (Direct)", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+        }
+
+        if (isWaitingForScreenshot) {
+            Spacer(Modifier.height(8.dp))
+            Text(
+                if (language == "ur") "دوسری اسکرین پر جائیں جہاں چارٹ نظر آتا ہے، پھر واپس آئیں — اسکرین شاٹ خودکار لیا جائے گا۔"
+                else "Switch to the screen showing your chart, then come back — the screenshot will be captured automatically.",
+                color = BrandSilverDim, fontSize = 11.sp, lineHeight = 16.sp
+            )
+        }
 
         Spacer(Modifier.height(16.dp))
 
@@ -141,14 +257,14 @@ fun AnalyzerScreen(language: String = "en") {
         Button(
             onClick = {
                 tapFeedback()
-                if (imageUri == null) return@Button
+                if (imageUri == null && capturedScreenBitmap == null) return@Button
                 errorMsg = null
                 isAnalyzing = true
                 val candleInterval = candleIntervalInput.toIntOrNull()
                 val tradeDuration = tradeDurationInput.toIntOrNull()
                 scope.launch {
                     try {
-                        val bitmap = withContext(Dispatchers.IO) {
+                        val bitmap = capturedScreenBitmap ?: withContext(Dispatchers.IO) {
                             context.contentResolver.openInputStream(imageUri!!)?.use { android.graphics.BitmapFactory.decodeStream(it) }
                         }
                         if (bitmap == null) {
@@ -165,7 +281,7 @@ fun AnalyzerScreen(language: String = "en") {
                     }
                 }
             },
-            enabled = imageUri != null && !isAnalyzing,
+            enabled = (imageUri != null || capturedScreenBitmap != null) && !isAnalyzing,
             colors = ButtonDefaults.buttonColors(containerColor = BrandGreen, contentColor = Color(0xFF04120B)),
             shape = RoundedCornerShape(12.dp),
             modifier = Modifier.fillMaxWidth().height(50.dp)
@@ -186,11 +302,50 @@ fun AnalyzerScreen(language: String = "en") {
                 Spacer(Modifier.height(14.dp))
                 TradeSuggestionCard(suggestion, language)
             }
+            if (r.matchedStrategies.isNotEmpty()) {
+                Spacer(Modifier.height(14.dp))
+                StrategyMatchesCard(r.matchedStrategies, language)
+            }
             Spacer(Modifier.height(14.dp))
             DetailedSignalPanel(r, language)
         }
 
         Spacer(Modifier.height(60.dp))
+    }
+}
+
+@Composable
+private fun StrategyMatchesCard(strategies: List<com.mitv.trademaster.analysis.StrategyMatch>, language: String) {
+    Card(colors = CardDefaults.cardColors(containerColor = PanelDark), shape = RoundedCornerShape(18.dp), modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(18.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Filled.Psychology, contentDescription = null, tint = Color(0xFFE3B934), modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(8.dp))
+                Text(if (language == "ur") "مماثل حکمت عملیاں" else "Matching Strategies", color = Color(0xFFE3B934), fontSize = 13.sp, fontWeight = FontWeight.Bold)
+            }
+            Spacer(Modifier.height(14.dp))
+            strategies.forEachIndexed { idx, s ->
+                if (idx > 0) {
+                    Spacer(Modifier.height(10.dp))
+                    HorizontalDivider(color = LineSubtle)
+                    Spacer(Modifier.height(10.dp))
+                }
+                val dirColor = when (s.direction) {
+                    Direction.UP -> BrandGreen
+                    Direction.DOWN -> BrandRed
+                    Direction.NEUTRAL -> BrandSilverDim
+                }
+                Row(verticalAlignment = Alignment.Top) {
+                    Box(modifier = Modifier.padding(top = 3.dp).size(8.dp).clip(CircleShape).background(dirColor))
+                    Spacer(Modifier.width(10.dp))
+                    Column {
+                        Text(if (language == "ur") s.nameUr else s.nameEn, color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                        Spacer(Modifier.height(4.dp))
+                        Text(if (language == "ur") s.descriptionUr else s.descriptionEn, color = BrandSilverDim, fontSize = 11.5.sp, lineHeight = 17.sp)
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -338,4 +493,11 @@ private fun DetailedSignalPanel(r: com.mitv.trademaster.analysis.AnalysisResult,
             Text(r.disclaimer, color = BrandSilverDim.copy(alpha = 0.6f), fontSize = 10.sp, lineHeight = 14.sp)
         }
     }
+}
+
+/** Creates a content:// URI (via FileProvider) in the app's cache dir for the camera to write the captured photo into. */
+private fun createCameraCaptureUri(context: android.content.Context): Uri {
+    val cacheDir = java.io.File(context.cacheDir, "camera").apply { mkdirs() }
+    val file = java.io.File(cacheDir, "chart_capture_${System.currentTimeMillis()}.jpg")
+    return androidx.core.content.FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
 }

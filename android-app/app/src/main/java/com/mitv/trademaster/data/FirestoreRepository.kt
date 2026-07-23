@@ -56,6 +56,24 @@ class FirestoreRepository {
             .await()
     }
 
+    suspend fun recordPracticeTradeResult(uid: String, won: Boolean) {
+        val updates = mutableMapOf<String, Any>("practiceTradesTotal" to com.google.firebase.firestore.FieldValue.increment(1))
+        if (won) updates["practiceTradesWon"] = com.google.firebase.firestore.FieldValue.increment(1)
+        db.collection("students").document(uid).update(updates).await()
+    }
+
+    suspend fun incrementJournalEntriesLogged(uid: String) {
+        db.collection("students").document(uid)
+            .update("journalEntriesLogged", com.google.firebase.firestore.FieldValue.increment(1))
+            .await()
+    }
+
+    suspend fun incrementCoursesCompleted(uid: String) {
+        db.collection("students").document(uid)
+            .update("coursesCompletedCount", com.google.firebase.firestore.FieldValue.increment(1))
+            .await()
+    }
+
     // ------------------------------------------------------------------
     // Courses & lessons (admin-authored content, student-read)
     // ------------------------------------------------------------------

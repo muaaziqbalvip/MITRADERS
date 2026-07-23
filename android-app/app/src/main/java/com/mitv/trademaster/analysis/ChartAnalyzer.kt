@@ -35,6 +35,22 @@ data class AnalysisResult(
     val disclaimer: String = "This is an educational pattern observation, not a guaranteed " +
         "outcome. Markets can move against any pattern. Always manage your own risk.",
     val tradeSuggestion: TradeSuggestion? = null,
+    val matchedStrategies: List<StrategyMatch> = emptyList(),
+)
+
+/**
+ * A named trading strategy the current chart structure resembles, with a
+ * plain-language reason it matched. Multiple strategies can match at once
+ * (e.g. a pullback in an uptrend is both "Trend Following" and "Support
+ * Bounce") — showing all of them gives the student more to learn from
+ * than collapsing to a single label.
+ */
+data class StrategyMatch(
+    val nameEn: String,
+    val nameUr: String,
+    val descriptionEn: String,
+    val descriptionUr: String,
+    val direction: Direction,
 )
 
 /**
@@ -127,6 +143,8 @@ object ChartAnalyzer {
             buildTradeSuggestion(direction, strength, volatility, srNote, candleIntervalMinutes, tradeDurationMinutes)
         } else null
 
+        val matchedStrategies = detectStrategies(candles, direction, strength, srNote, volatility)
+
         return AnalysisResult(
             direction = direction,
             confidence = confidence,
@@ -138,7 +156,71 @@ object ChartAnalyzer {
             signals = signals,
             leanStatement = leanStatement,
             tradeSuggestion = tradeSuggestion,
+            matchedStrategies = matchedStrategies,
         )
+    }
+
+    /**
+     * Checks the measured trend/volatility/S-R signals against a handful
+     * of well-known, named strategies from technical analysis education.
+     * This isn't a separate ML model — it's the same underlying
+     * measurements (trend strength, support/resistance proximity,
+     * volatility) reframed as "which textbook setup does this resemble",
+     * which is more useful for a learning app than a bare confidence
+     * number alone.
+     */
+    private fun detectStrategies(candles: List<Candle>, direction: Direction, strength: Double, srNote: String, volatility: Double): List<StrategyMatch> {
+        val matches = mutableListOf<StrategyMatch>()
+
+        // Trend Following: strong, clean directional move.
+        if (strength > 0.55 && direction != Direction.NEUTRAL) {
+            matches.add(StrategyMatch(
+                nameEn = "Trend Following", nameUr = "رجحان کی پیروی",
+                descriptionEn = "Price shows a clean, sustained directional move — the classic setup for riding an established trend rather than fighting it.",
+                descriptionUr = "قیمت ایک صاف اور مستقل سمتی حرکت دکھا رہی ہے — یہ ایک قائم شدہ رجحان کے ساتھ چلنے کا کلاسک سیٹ اپ ہے۔",
+                direction = direction,
+            ))
+        }
+
+        // Support/Resistance Bounce: price near a level with direction favoring a bounce.
+        if (srNote.contains("support") && direction == Direction.UP) {
+            matches.add(StrategyMatch(
+                nameEn = "Support Bounce", nameUr = "سپورٹ باؤنس",
+                descriptionEn = "Price is trading near a recent support level and showing upward reaction — a common bounce setup, though support can also break.",
+                descriptionUr = "قیمت حالیہ سپورٹ لیول کے قریب ہے اور اوپر کی طرف ردعمل دکھا رہی ہے — یہ ایک عام باؤنس سیٹ اپ ہے، اگرچہ سپورٹ ٹوٹ بھی سکتی ہے۔",
+                direction = Direction.UP,
+            ))
+        }
+        if (srNote.contains("resistance") && direction == Direction.DOWN) {
+            matches.add(StrategyMatch(
+                nameEn = "Resistance Rejection", nameUr = "ریزسٹنس ریجیکشن",
+                descriptionEn = "Price is trading near a recent resistance level and showing downward reaction — a common rejection setup, though resistance can also break.",
+                descriptionUr = "قیمت حالیہ ریزسٹنس لیول کے قریب ہے اور نیچے کی طرف ردعمل دکھا رہی ہے — یہ ایک عام ریجیکشن سیٹ اپ ہے۔",
+                direction = Direction.DOWN,
+            ))
+        }
+
+        // Breakout: high volatility with strong directional move — price moving fast through a level.
+        if (volatility > 0.5 && strength > 0.5 && direction != Direction.NEUTRAL) {
+            matches.add(StrategyMatch(
+                nameEn = "Momentum Breakout", nameUr = "مومینٹم بریک آؤٹ",
+                descriptionEn = "Larger, more volatile candles combined with a strong directional push resemble a breakout — fast moves that can continue or reverse sharply.",
+                descriptionUr = "بڑی، زیادہ اتار چڑھاؤ والی کینڈلز مضبوط سمتی زور کے ساتھ ایک بریک آؤٹ سے مشابہت رکھتی ہیں — تیز حرکتیں جو جاری رہ سکتی ہیں یا اچانک پلٹ سکتی ہیں۔",
+                direction = direction,
+            ))
+        }
+
+        // Range/Consolidation: weak trend, low volatility.
+        if (strength < 0.3 && volatility < 0.35) {
+            matches.add(StrategyMatch(
+                nameEn = "Range-Bound / Consolidation", nameUr = "محدود دائرہ / استحکام",
+                descriptionEn = "Price is moving sideways without a clear trend — often better suited to range strategies than trend-following ones.",
+                descriptionUr = "قیمت واضح رجحان کے بغیر سائیڈ ویز حرکت کر رہی ہے — یہ اکثر رینج حکمت عملیوں کے لیے زیادہ موزوں ہوتی ہے۔",
+                direction = Direction.NEUTRAL,
+            ))
+        }
+
+        return matches
     }
 
     /**
