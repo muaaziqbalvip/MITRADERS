@@ -1,0 +1,76 @@
+PROPRIETARY SOFTWARE LICENSE
+
+Copyright © 2026 Muslim Islam Org. All Rights Reserved.
+
+Project: MI Trade Master (Android Application, Admin Panel, and associated
+source code, assets, documentation, and configuration files contained in
+this repository)
+
+1. GRANT OF RIGHTS
+
+   No license, right, or interest in this software, in whole or in part,
+   is granted to any person or entity except as expressly authorized in
+   writing by the copyright holder, Muslim Islam Org ("the Owner").
+
+2. RESTRICTIONS
+
+   Except as expressly permitted in writing by the Owner, no person may:
+
+   a. Copy, reproduce, or duplicate this software or any portion of it;
+   b. Modify, adapt, translate, or create derivative works based on it;
+   c. Distribute, publish, sublicense, sell, rent, lease, or otherwise
+      make this software available to any third party;
+   d. Reverse engineer, decompile, or disassemble this software, except
+      to the extent such restriction is prohibited by applicable law;
+   e. Remove or alter any copyright, trademark, or other proprietary
+      notices contained in the software;
+   f. Use the "MI Trade Master," "Muslim Islam Org," or associated
+      branding, names, or logos without prior written permission.
+
+3. OWNERSHIP
+
+   This software is licensed, not sold. The Owner retains all right,
+   title, and interest in and to the software, including all
+   intellectual property rights therein. This license does not convey
+   any ownership rights.
+
+4. THIRD-PARTY COMPONENTS
+
+   This project may make use of third-party open-source libraries and
+   services (including but not limited to Firebase, Jetpack Compose,
+   Kotlin Coroutines, and the Groq API), each of which remains governed
+   by its own respective license. Use of this project does not grant
+   any rights to those third-party components beyond what their own
+   licenses permit.
+
+5. DISCLAIMER OF WARRANTY
+
+   THIS SOFTWARE IS PROVIDED "AS IS," WITHOUT WARRANTY OF ANY KIND,
+   EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+   MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, AND
+   NONINFRINGEMENT. IN NO EVENT SHALL THE OWNER BE LIABLE FOR ANY CLAIM,
+   DAMAGES, OR OTHER LIABILITY ARISING FROM THE USE OF THIS SOFTWARE.
+
+6. EDUCATIONAL SCOPE NOTICE
+
+   This application is designed as a trading-education and paper-trading
+   simulation tool. It does not provide financial, investment, or trading
+   advice, and no feature within it guarantees financial outcomes. Any
+   analysis, signal, or educational content produced by the application
+   is for learning purposes only and should not be relied upon as a
+   substitute for professional financial advice.
+
+7. TERMINATION
+
+   Any use of this software in violation of this license automatically
+   terminates any rights granted herein, without notice from the Owner.
+
+8. CONTACT
+
+   For licensing inquiries, permissions, or usage requests, please
+   contact Muslim Islam Org through the project's official channels.
+
+---
+
+All trademarks, service marks, and trade names referenced in this
+software are the property of their respective owners.

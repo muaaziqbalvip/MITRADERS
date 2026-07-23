@@ -1,4 +1,41 @@
-# MI Trade Master v2.0
+<div align="center">
+
+<img src=".github/assets/app_icon.png" width="120" height="120" alt="MI Trade Master App Icon" />
+
+# MI Trade Master
+
+### Trading Education & Paper-Trading Companion App
+
+**v8.0.0** · Android · Powered by Firebase + Groq AI
+
+[![Platform](https://img.shields.io/badge/Platform-Android-3DDC84?style=flat-square&logo=android&logoColor=white)](#)
+[![Version](https://img.shields.io/badge/Version-8.0.0-34E39A?style=flat-square)](#)
+[![Min SDK](https://img.shields.io/badge/Min%20SDK-26-1a7a56?style=flat-square)](#)
+[![Target SDK](https://img.shields.io/badge/Target%20SDK-34-1a7a56?style=flat-square)](#)
+[![Kotlin](https://img.shields.io/badge/Kotlin-Jetpack%20Compose-7F52FF?style=flat-square&logo=kotlin&logoColor=white)](#)
+[![Firebase](https://img.shields.io/badge/Backend-Firebase-FFCA28?style=flat-square&logo=firebase&logoColor=white)](#)
+[![License](https://img.shields.io/badge/License-Proprietary-red?style=flat-square)](./LICENSE)
+
+*A publisher brand of* **Muslim Islam Org**
+
+</div>
+
+---
+
+## 📋 Table of Contents
+
+- [Overview](#overview)
+- [Key Features](#-key-features)
+- [Tech Stack](#-tech-stack)
+- [What Changed from v1](#what-changed-from-v1)
+- [Setup Guide](#setup--part-1-firebase-console)
+- [Project Structure](#where-things-live-in-firestore)
+- [Changelog](#v4-changelog)
+- [License](#-license)
+
+---
+
+## Overview
 
 A full learning + trading-education companion app: Firebase multi-method
 auth (Email/Google/GitHub/Phone), student profiles, courses with YouTube
@@ -6,6 +43,36 @@ lessons and PDF books, a paper-trading practice mode, an on-device chart
 analyzer, a Groq-powered support chat, and a monthly subscription with
 QR-code payment + admin approval — all controlled from a browser-based
 admin panel, no separate backend server required.
+
+> **Educational tool.** All trading features are paper/demo simulations for
+> learning purposes. The chart analyzer produces educational observations,
+> never guaranteed instructions or financial advice. See [Scope Note](#scope-note-unchanged-from-v1-please-keep).
+
+## ✨ Key Features
+
+| Feature | Description |
+|---|---|
+| 🔐 **Multi-Auth** | Email/Password, Google, GitHub, Phone/OTP via Firebase |
+| 📚 **Courses & Lessons** | YouTube video lessons + PDF books, book-style reader UI |
+| 📈 **Practice Mode** | Simulated live paper-trading with animated candles, virtual balance |
+| 🧠 **On-Device Analyzer** | Pattern recognition with confidence scoring — no network call |
+| 💬 **AI Support Chat** | Groq-powered assistant (text + chart image analysis) |
+| 💳 **Subscriptions** | QR-code payment with admin approval workflow |
+| 🛠️ **Admin Panel** | Single-file browser dashboard — no backend server required |
+| 🔔 **Push Notifications** | FCM with deep-link routing to any in-app screen |
+| ⬆️ **Auto-Update** | In-place APK updates via Firestore version control |
+
+## 🧩 Tech Stack
+
+- **Language:** Kotlin
+- **UI:** Jetpack Compose, Material 3
+- **Backend:** Firebase (Auth, Firestore, Cloud Messaging)
+- **Image Hosting:** ImgBB (free-tier friendly, no Firebase Storage/Blaze needed)
+- **AI:** Groq API (`llama-3.1-8b-instant` for text, `llama-4-scout-17b` for vision)
+- **CI/CD:** GitHub Actions (automated debug APK build + GitHub Release)
+- **Admin Panel:** Single-file HTML/JS + Firestore SDK
+
+---
 
 ## What changed from v1
 
@@ -249,3 +316,23 @@ students/{uid}.fcmToken     — push notification target token (auto-saved on to
    Key — this panel intentionally does not embed that key client-side for
    security. A small Cloud Function (a few lines) is the standard way to
    do this if you want push banners in addition to in-app announcements.
+
+---
+
+## 📄 License
+
+**Copyright © 2026 Muslim Islam Org. All Rights Reserved.**
+
+This project and its source code, assets, and documentation are
+proprietary and confidential. Unauthorized copying, modification,
+distribution, public display, or use of this software, via any medium,
+is strictly prohibited without prior written permission from the
+copyright holder.
+
+See the [LICENSE](./LICENSE) file for full terms.
+
+<div align="center">
+
+Made with 🖤 by **Muslim Islam Org**
+
+</div>
