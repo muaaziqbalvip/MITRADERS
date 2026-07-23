@@ -95,8 +95,15 @@ private fun EconomicCalendarWebView() {
             WebView(context).apply {
                 settings.javaScriptEnabled = true
                 settings.domStorageEnabled = true
+                settings.loadWithOverviewMode = true
+                settings.useWideViewPort = true
+                settings.mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
                 webViewClient = WebViewClient()
                 setBackgroundColor(android.graphics.Color.parseColor("#05070A"))
+                android.webkit.CookieManager.getInstance().let { cm ->
+                    cm.setAcceptCookie(true)
+                    cm.setAcceptThirdPartyCookies(this, true)
+                }
                 loadDataWithBaseURL(
                     "https://s.tradingview.com", """
                     <!DOCTYPE html><html><head>
@@ -133,8 +140,15 @@ private fun ForexNewsWebView() {
             WebView(context).apply {
                 settings.javaScriptEnabled = true
                 settings.domStorageEnabled = true
+                settings.loadWithOverviewMode = true
+                settings.useWideViewPort = true
+                settings.mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
                 webViewClient = WebViewClient()
                 setBackgroundColor(android.graphics.Color.parseColor("#05070A"))
+                android.webkit.CookieManager.getInstance().let { cm ->
+                    cm.setAcceptCookie(true)
+                    cm.setAcceptThirdPartyCookies(this, true)
+                }
                 loadDataWithBaseURL(
                     "https://s.tradingview.com", """
                     <!DOCTYPE html><html><head>

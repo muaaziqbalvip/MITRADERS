@@ -105,12 +105,24 @@ private fun TradingViewWebView(symbol: String) {
             WebView(context).apply {
                 settings.javaScriptEnabled = true
                 settings.domStorageEnabled = true
+                settings.loadWithOverviewMode = true
+                settings.useWideViewPort = true
+                settings.mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
                 webViewClient = WebViewClient()
                 setBackgroundColor(android.graphics.Color.parseColor("#05070A"))
+                // TradingView's widget script sets its own cookies from tradingview.com
+                // while the page is hosted via loadDataWithBaseURL — without explicitly
+                // allowing third-party cookies here, WebView silently blocks them and the
+                // widget fails to initialize (shows a blank/white panel with no error).
+                android.webkit.CookieManager.getInstance().let { cm ->
+                    cm.setAcceptCookie(true)
+                    cm.setAcceptThirdPartyCookies(this, true)
+                }
                 loadDataWithBaseURL("https://s.tradingview.com", buildHtml(symbol), "text/html", "UTF-8", null)
             }
         },
         update = { webView ->
+            android.webkit.CookieManager.getInstance().setAcceptThirdPartyCookies(webView, true)
             webView.loadDataWithBaseURL("https://s.tradingview.com", buildHtml(symbol), "text/html", "UTF-8", null)
         }
     )

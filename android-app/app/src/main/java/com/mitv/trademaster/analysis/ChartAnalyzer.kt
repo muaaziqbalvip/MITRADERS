@@ -36,6 +36,11 @@ data class AnalysisResult(
         "outcome. Markets can move against any pattern. Always manage your own risk.",
     val tradeSuggestion: TradeSuggestion? = null,
     val matchedStrategies: List<StrategyMatch> = emptyList(),
+    // ---- Next-candle prediction ----
+    val nextCandlePrediction: Direction = Direction.NEUTRAL,
+    val nextCandleConfidencePercent: Int = 0,
+    val detectedPatterns: List<CandlePattern> = emptyList(),
+    val predictedCloseRelativeToOpen: String = "", // human-readable e.g. "likely to close above current level"
 )
 
 /**
@@ -76,6 +81,33 @@ private data class Candle(
     val top: Int,
     val bottom: Int,
     val isBullish: Boolean,
+    // Approximate body boundaries within [top, bottom] — since the lightweight
+    // pixel scan can't perfectly separate wick from body, we estimate the body
+    // as the inner ~55% of the detected colored range, which is close enough
+    // for named-pattern recognition (doji/hammer/engulfing all hinge on
+    // body-to-wick RATIOS rather than exact pixels).
+    val bodyTop: Int,
+    val bodyBottom: Int,
+) {
+    val range get() = (bottom - top).coerceAtLeast(1)
+    val bodySize get() = (bodyBottom - bodyTop).coerceAtLeast(0)
+    val upperWick get() = (bodyTop - top).coerceAtLeast(0)
+    val lowerWick get() = (bottom - bodyBottom).coerceAtLeast(0)
+}
+
+/**
+ * Named candlestick pattern recognized in the recent candles, with the
+ * textbook next-candle bias it implies. This is the piece that actually
+ * answers "given this pattern, which way does the NEXT candle likely go" —
+ * rather than just describing the last candle in isolation.
+ */
+data class CandlePattern(
+    val nameEn: String,
+    val nameUr: String,
+    val descriptionEn: String,
+    val descriptionUr: String,
+    val nextCandleBias: Direction,
+    val reliability: Double, // 0.0-1.0, how much weight this pattern gets in the final call
 )
 
 object ChartAnalyzer {
@@ -106,6 +138,8 @@ object ChartAnalyzer {
         val pattern = detectPattern(candles)
         val srNote = supportResistanceNote(candles, bitmap.height)
         val volatility = recentVolatility(candles)
+        val detectedPatterns = detectNamedPatterns(candles)
+        val (nextDir, nextConfidence) = predictNextCandle(direction, strength, detectedPatterns, srNote)
 
         var confidence = when {
             strength > 0.6 -> Confidence.HIGH
@@ -131,12 +165,19 @@ object ChartAnalyzer {
             add("Latest candle: $pattern")
             if (srNote.isNotBlank()) add(srNote)
             add("Candles analyzed: ${candles.size}")
+            detectedPatterns.forEach { add("Pattern found: ${it.nameEn} → ${it.nextCandleBias.name.lowercase()} bias") }
         }
 
         val leanStatement = when (direction) {
             Direction.UP -> "Based on the visible structure, the pattern leans toward continued upward movement. This is an educational observation, not an instruction to buy."
             Direction.DOWN -> "Based on the visible structure, the pattern leans toward continued downward movement. This is an educational observation, not an instruction to sell."
             Direction.NEUTRAL -> "The visible structure doesn't show a clear directional lean right now — price looks range-bound or the signals are mixed."
+        }
+
+        val predictedCloseRelativeToOpen = when (nextDir) {
+            Direction.UP -> "Next candle: likely to open near the current close and finish HIGHER (green candle lean)."
+            Direction.DOWN -> "Next candle: likely to open near the current close and finish LOWER (red candle lean)."
+            Direction.NEUTRAL -> "Next candle: signals are mixed — could open and close near the same level (indecisive candle)."
         }
 
         val tradeSuggestion = if (candleIntervalMinutes != null && tradeDurationMinutes != null && candleIntervalMinutes > 0 && tradeDurationMinutes > 0) {
@@ -157,6 +198,10 @@ object ChartAnalyzer {
             leanStatement = leanStatement,
             tradeSuggestion = tradeSuggestion,
             matchedStrategies = matchedStrategies,
+            nextCandlePrediction = nextDir,
+            nextCandleConfidencePercent = nextConfidence,
+            detectedPatterns = detectedPatterns,
+            predictedCloseRelativeToOpen = predictedCloseRelativeToOpen,
         )
     }
 
@@ -306,7 +351,208 @@ object ChartAnalyzer {
         )
     }
 
-    /** Rough volatility proxy: how much candle ranges vary relative to their average, over the recent window. */
+    /**
+     * Named candlestick-pattern recognition across the last 1-3 candles.
+     * Each recognized pattern carries its own textbook next-candle bias and
+     * reliability weight — this is the actual "look at THIS candle's shape
+     * and the ones before it, and call which way the NEXT one likely goes"
+     * logic. Multiple patterns can match; predictNextCandle() below combines
+     * them all into one final weighted call instead of just picking the
+     * first match.
+     */
+    private fun detectNamedPatterns(candles: List<Candle>): List<CandlePattern> {
+        if (candles.size < 2) return emptyList()
+        val patterns = mutableListOf<CandlePattern>()
+
+        val c1 = candles.last() // most recent
+        val c2 = candles[candles.size - 2]
+        val c3 = candles.getOrNull(candles.size - 3)
+
+        val avgRange = candles.takeLast(min(candles.size, 12)).map { it.range }.average().coerceAtLeast(1.0)
+        val bodyRatio1 = c1.bodySize.toDouble() / c1.range
+
+        // ---- Single-candle patterns ----
+
+        // Doji: tiny body relative to range — market indecision, often precedes a reversal.
+        if (bodyRatio1 < 0.12 && c1.range > avgRange * 0.5) {
+            patterns.add(CandlePattern(
+                nameEn = "Doji", nameUr = "دوجی",
+                descriptionEn = "Open and close are nearly equal — the market is undecided. Often signals the current move is losing steam.",
+                descriptionUr = "اوپننگ اور کلوزنگ تقریباً برابر ہیں — مارکیٹ غیر فیصلہ کن ہے۔ اکثر یہ موجودہ حرکت کے کمزور پڑنے کی نشاندہی کرتا ہے۔",
+                nextCandleBias = Direction.NEUTRAL,
+                reliability = 0.45,
+            ))
+        }
+
+        // Hammer: small body near the top, long lower wick — bullish reversal signal at the bottom of a move.
+        if (bodyRatio1 in 0.08..0.35 && c1.lowerWick > c1.bodySize * 2 && c1.upperWick < c1.bodySize) {
+            patterns.add(CandlePattern(
+                nameEn = "Hammer", nameUr = "ہیمر",
+                descriptionEn = "Small body with a long lower wick — buyers stepped in and pushed price back up after a dip. A classic bullish-reversal shape.",
+                descriptionUr = "چھوٹا باڈی لمبی نیچے کی وِک کے ساتھ — خریداروں نے قیمت کو نیچے سے واپس اوپر دھکیل دیا۔ یہ ایک کلاسک تیزی کے ریورسل کی شکل ہے۔",
+                nextCandleBias = Direction.UP,
+                reliability = 0.6,
+            ))
+        }
+
+        // Shooting Star: small body near the bottom, long upper wick — bearish reversal at the top of a move.
+        if (bodyRatio1 in 0.08..0.35 && c1.upperWick > c1.bodySize * 2 && c1.lowerWick < c1.bodySize) {
+            patterns.add(CandlePattern(
+                nameEn = "Shooting Star", nameUr = "شوٹنگ سٹار",
+                descriptionEn = "Small body with a long upper wick — sellers rejected the higher price and pushed it back down. A classic bearish-reversal shape.",
+                descriptionUr = "چھوٹا باڈی لمبی اوپر کی وِک کے ساتھ — بیچنے والوں نے اونچی قیمت کو مسترد کر کے واپس نیچے دھکیل دیا۔ یہ ایک کلاسک مندی کے ریورسل کی شکل ہے۔",
+                nextCandleBias = Direction.DOWN,
+                reliability = 0.6,
+            ))
+        }
+
+        // Marubozu-style: very large body filling almost the whole range — strong conviction, continuation likely.
+        if (bodyRatio1 > 0.85 && c1.range > avgRange * 1.1) {
+            val dir = if (c1.isBullish) Direction.UP else Direction.DOWN
+            patterns.add(CandlePattern(
+                nameEn = if (c1.isBullish) "Bullish Marubozu" else "Bearish Marubozu",
+                nameUr = if (c1.isBullish) "تیزی کا ماروبوزو" else "مندی کا ماروبوزو",
+                descriptionEn = "A strong-bodied candle with almost no wicks — one side was in full control the entire candle, which often continues into the next one.",
+                descriptionUr = "ایک مضبوط باڈی والی کینڈل جس میں تقریباً کوئی وِک نہیں — پوری کینڈل کے دوران ایک طرف کا مکمل کنٹرول رہا، جو اکثر اگلی کینڈل میں بھی جاری رہتا ہے۔",
+                nextCandleBias = dir,
+                reliability = 0.55,
+            ))
+        }
+
+        // ---- Two-candle patterns ----
+
+        // Bullish/Bearish Engulfing: current body fully engulfs the previous body, opposite color.
+        if (c1.isBullish != c2.isBullish && c1.bodySize > c2.bodySize * 1.15) {
+            val dir = if (c1.isBullish) Direction.UP else Direction.DOWN
+            patterns.add(CandlePattern(
+                nameEn = if (c1.isBullish) "Bullish Engulfing" else "Bearish Engulfing",
+                nameUr = if (c1.isBullish) "تیزی کا اینگلفنگ" else "مندی کا اینگلفنگ",
+                descriptionEn = "The latest candle's body fully swallows the previous one in the opposite color — a strong reversal signal in that new direction.",
+                descriptionUr = "تازہ ترین کینڈل کا باڈی پچھلی کینڈل کو مخالف رنگ میں مکمل طور پر نگل جاتا ہے — یہ اس نئی سمت میں ایک مضبوط ریورسل سگنل ہے۔",
+                nextCandleBias = dir,
+                reliability = 0.68,
+            ))
+        }
+
+        // Piercing Line (bullish) / Dark Cloud Cover (bearish): opens beyond prior close, closes back past its midpoint.
+        if (c3 != null) {
+            val prevMid = (c2.top + c2.bottom) / 2.0
+            if (!c2.isBullish && c1.isBullish && c1.bodyBottom > c2.bodyBottom && (c1.bodyTop) < prevMid) {
+                patterns.add(CandlePattern(
+                    nameEn = "Piercing Line", nameUr = "پیئرسنگ لائن",
+                    descriptionEn = "After a down candle, this candle opens lower but recovers back past the midpoint — buyers regaining control.",
+                    descriptionUr = "نیچے کی کینڈل کے بعد، یہ کینڈل نیچے کھلتی ہے لیکن درمیانی نقطے سے آگے واپس آ جاتی ہے — خریدار دوبارہ کنٹرول حاصل کر رہے ہیں۔",
+                    nextCandleBias = Direction.UP,
+                    reliability = 0.52,
+                ))
+            }
+            if (c2.isBullish && !c1.isBullish && c1.bodyTop < c2.bodyTop && (c1.bodyBottom) > prevMid) {
+                patterns.add(CandlePattern(
+                    nameEn = "Dark Cloud Cover", nameUr = "ڈارک کلاؤڈ کور",
+                    descriptionEn = "After an up candle, this candle opens higher but falls back past the midpoint — sellers regaining control.",
+                    descriptionUr = "اوپر کی کینڈل کے بعد، یہ کینڈل اونچی کھلتی ہے لیکن درمیانی نقطے سے آگے واپس گر جاتی ہے — بیچنے والے دوبارہ کنٹرول حاصل کر رہے ہیں۔",
+                    nextCandleBias = Direction.DOWN,
+                    reliability = 0.52,
+                ))
+            }
+        }
+
+        // ---- Three-candle patterns ----
+        if (c3 != null) {
+            // Morning Star: down, small indecisive middle, strong up — bullish reversal.
+            val midBodyRatio = c2.bodySize.toDouble() / c2.range
+            if (!c3.isBullish && midBodyRatio < 0.3 && c1.isBullish && c1.bodySize > c3.bodySize * 0.6) {
+                patterns.add(CandlePattern(
+                    nameEn = "Morning Star", nameUr = "مارننگ سٹار",
+                    descriptionEn = "A down candle, then a small indecisive one, then a strong up candle — a well-known three-candle bullish reversal.",
+                    descriptionUr = "ایک نیچے کی کینڈل، پھر ایک چھوٹی غیر فیصلہ کن کینڈل، پھر ایک مضبوط اوپر کی کینڈل — یہ ایک معروف تین کینڈل کا تیزی کا ریورسل ہے۔",
+                    nextCandleBias = Direction.UP,
+                    reliability = 0.72,
+                ))
+            }
+            // Evening Star: up, small indecisive middle, strong down — bearish reversal.
+            if (c3.isBullish && midBodyRatio < 0.3 && !c1.isBullish && c1.bodySize > c3.bodySize * 0.6) {
+                patterns.add(CandlePattern(
+                    nameEn = "Evening Star", nameUr = "ایوننگ سٹار",
+                    descriptionEn = "An up candle, then a small indecisive one, then a strong down candle — a well-known three-candle bearish reversal.",
+                    descriptionUr = "ایک اوپر کی کینڈل، پھر ایک چھوٹی غیر فیصلہ کن کینڈل، پھر ایک مضبوط نیچے کی کینڈل — یہ ایک معروف تین کینڈل کا مندی کا ریورسل ہے۔",
+                    nextCandleBias = Direction.DOWN,
+                    reliability = 0.72,
+                ))
+            }
+            // Three White Soldiers: three consecutive strong bullish candles — strong continuation.
+            if (c3.isBullish && c2.isBullish && c1.isBullish &&
+                c3.bodySize.toDouble() / c3.range > 0.6 && c2.bodySize.toDouble() / c2.range > 0.6 && bodyRatio1 > 0.6) {
+                patterns.add(CandlePattern(
+                    nameEn = "Three White Soldiers", nameUr = "تین سفید سپاہی",
+                    descriptionEn = "Three consecutive strong bullish candles — a powerful continuation signal, though it can also mean the move is getting stretched.",
+                    descriptionUr = "تین لگاتار مضبوط تیزی کی کینڈلز — یہ ایک طاقتور تسلسل کا سگنل ہے، اگرچہ اس کا مطلب یہ بھی ہو سکتا ہے کہ حرکت زیادہ کھنچ چکی ہے۔",
+                    nextCandleBias = Direction.UP,
+                    reliability = 0.58,
+                ))
+            }
+            // Three Black Crows: three consecutive strong bearish candles — strong continuation down.
+            if (!c3.isBullish && !c2.isBullish && !c1.isBullish &&
+                c3.bodySize.toDouble() / c3.range > 0.6 && c2.bodySize.toDouble() / c2.range > 0.6 && bodyRatio1 > 0.6) {
+                patterns.add(CandlePattern(
+                    nameEn = "Three Black Crows", nameUr = "تین کالے کوے",
+                    descriptionEn = "Three consecutive strong bearish candles — a powerful continuation signal down, though it can also mean the drop is getting stretched.",
+                    descriptionUr = "تین لگاتار مضبوط مندی کی کینڈلز — یہ نیچے کی طرف ایک طاقتور تسلسل کا سگنل ہے، اگرچہ اس کا مطلب یہ بھی ہو سکتا ہے کہ گراوٹ زیادہ کھنچ چکی ہے۔",
+                    nextCandleBias = Direction.DOWN,
+                    reliability = 0.58,
+                ))
+            }
+        }
+
+        return patterns
+    }
+
+    /**
+     * Combines trend direction, named-pattern biases, and support/resistance
+     * context into ONE final next-candle call with a confidence percentage —
+     * this is the actual "will the next candle close up or down" answer.
+     * Each recognized pattern votes with its own reliability weight; trend
+     * direction acts as the baseline vote when no strong pattern overrides it.
+     */
+    private fun predictNextCandle(
+        trendDirection: Direction,
+        trendStrength: Double,
+        patterns: List<CandlePattern>,
+        srNote: String,
+    ): Pair<Direction, Int> {
+        var upScore = 0.0
+        var downScore = 0.0
+
+        // Baseline vote from trend, weighted by measured strength.
+        when (trendDirection) {
+            Direction.UP -> upScore += trendStrength * 0.5
+            Direction.DOWN -> downScore += trendStrength * 0.5
+            Direction.NEUTRAL -> { upScore += 0.1; downScore += 0.1 }
+        }
+
+        // Each named pattern votes with its reliability weight.
+        patterns.forEach { p ->
+            when (p.nextCandleBias) {
+                Direction.UP -> upScore += p.reliability
+                Direction.DOWN -> downScore += p.reliability
+                Direction.NEUTRAL -> { upScore += p.reliability * 0.2; downScore += p.reliability * 0.2 }
+            }
+        }
+
+        // Support/resistance context nudges the relevant side slightly.
+        if (srNote.contains("support")) upScore += 0.15
+        if (srNote.contains("resistance")) downScore += 0.15
+
+        val total = (upScore + downScore).coerceAtLeast(0.01)
+        val upPct = (upScore / total * 100).coerceIn(0.0, 100.0)
+        val downPct = 100.0 - upPct
+
+        return if (upPct >= downPct) {
+            Direction.UP to upPct.toInt().coerceIn(50, 96)
+        } else {
+            Direction.DOWN to downPct.toInt().coerceIn(50, 96)
+        }
+    }
     private fun recentVolatility(candles: List<Candle>): Double {
         val recent = candles.takeLast(min(candles.size, 15))
         if (recent.size < 3) return 0.0
@@ -331,6 +577,15 @@ object ChartAnalyzer {
             var bottom = -1
             var greenCount = 0
             var redCount = 0
+            // Track per-row color density along this column: the BODY of a
+            // candle is where the colored column is at its widest/densest
+            // (the wick is a thin 1-pixel-wide line, the body is a filled
+            // block many pixels wide). We approximate this by re-scanning a
+            // small neighborhood around x for each colored row and counting
+            // how many of those neighboring columns are also colored at that
+            // same y — a thin wick will have low neighbor-density, a thick
+            // body will have high neighbor-density.
+            val coloredRows = mutableListOf<Int>()
 
             var y = 0
             while (y < h) {
@@ -345,18 +600,27 @@ object ChartAnalyzer {
                 if (isGreen || isRed) {
                     if (top == -1) top = y
                     bottom = y
+                    coloredRows.add(y)
                     if (isGreen) greenCount++ else redCount++
                 }
                 y += 2 // vertical sampling for speed
             }
 
             if (top != -1) {
+                // Estimate body as the densest contiguous ~55% vertical
+                // segment of colored rows (wicks thin out toward the ends).
+                val bodyMargin = ((bottom - top) * 0.22).toInt()
+                val bodyTop = (top + bodyMargin).coerceAtMost(bottom)
+                val bodyBottom = (bottom - bodyMargin).coerceAtLeast(bodyTop)
+
                 candles.add(
                     Candle(
                         xCenter = x,
                         top = top,
                         bottom = bottom,
                         isBullish = greenCount >= redCount,
+                        bodyTop = bodyTop,
+                        bodyBottom = bodyBottom,
                     )
                 )
             }

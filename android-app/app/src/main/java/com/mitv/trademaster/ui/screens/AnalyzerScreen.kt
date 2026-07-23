@@ -3,6 +3,13 @@ package com.mitv.trademaster.ui.screens
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -12,9 +19,11 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material.icons.filled.Psychology
 import androidx.compose.material.icons.filled.ScreenshotMonitor
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.TrendingDown
 import androidx.compose.material.icons.filled.TrendingFlat
 import androidx.compose.material.icons.filled.TrendingUp
@@ -24,13 +33,16 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import com.mitv.trademaster.analysis.AnnotatedChartExporter
 import com.mitv.trademaster.analysis.ChartAnalyzer
 import com.mitv.trademaster.analysis.Direction
 import com.mitv.trademaster.data.AuthRepository
@@ -56,6 +68,9 @@ fun AnalyzerScreen(language: String = "en") {
     var tradeDurationInput by remember { mutableStateOf("") }
     var capturedScreenBitmap by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
     var isWaitingForScreenshot by remember { mutableStateOf(false) }
+    var analyzedBitmap by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
+    var exportedUri by remember { mutableStateOf<Uri?>(null) }
+    var isExporting by remember { mutableStateOf(false) }
 
     // While waiting for a screenshot (user just granted screen-capture
     // permission or switched away to their chart app), poll for the next
@@ -272,6 +287,8 @@ fun AnalyzerScreen(language: String = "en") {
                         } else {
                             val r = withContext(Dispatchers.Default) { ChartAnalyzer.analyze(bitmap, candleInterval, tradeDuration) }
                             result = r
+                            analyzedBitmap = bitmap
+                            exportedUri = null
                             authRepo.currentUser?.uid?.let { uid -> scope.launch { runCatching { firestoreRepo.incrementAnalysesRun(uid) } } }
                         }
                     } catch (e: Exception) {
@@ -297,6 +314,32 @@ fun AnalyzerScreen(language: String = "en") {
 
         result?.let { r ->
             Spacer(Modifier.height(18.dp))
+            NextCandlePredictorCircle(r, language)
+            Spacer(Modifier.height(14.dp))
+            DownloadAnalysisButton(
+                language = language,
+                isExporting = isExporting,
+                exportedUri = exportedUri,
+                onDownload = {
+                    tapFeedback()
+                    val bmp = analyzedBitmap ?: return@DownloadAnalysisButton
+                    isExporting = true
+                    scope.launch {
+                        val uri = withContext(Dispatchers.IO) { AnnotatedChartExporter.export(context, bmp, r) }
+                        exportedUri = uri
+                        isExporting = false
+                        if (uri != null) {
+                            val shareIntent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                                type = "image/png"
+                                putExtra(android.content.Intent.EXTRA_STREAM, uri)
+                                addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                            }
+                            context.startActivity(android.content.Intent.createChooser(shareIntent, "Save / Share Analysis"))
+                        }
+                    }
+                }
+            )
+            Spacer(Modifier.height(14.dp))
             LeanCard(r, language)
             r.tradeSuggestion?.let { suggestion ->
                 Spacer(Modifier.height(14.dp))
@@ -491,6 +534,162 @@ private fun DetailedSignalPanel(r: com.mitv.trademaster.analysis.AnalysisResult,
 
             Spacer(Modifier.height(14.dp))
             Text(r.disclaimer, color = BrandSilverDim.copy(alpha = 0.6f), fontSize = 10.sp, lineHeight = 14.sp)
+        }
+    }
+}
+
+/**
+ * The centerpiece "analyzer brain" visual: a large circular gauge showing
+ * the predicted NEXT candle direction and confidence percentage, with a
+ * slowly rotating scan ring to give it a live "analyzing" feel. This is
+ * the single most important number in the screen — everything else
+ * (patterns, strategies, signals) is supporting detail for this call.
+ */
+@Composable
+private fun NextCandlePredictorCircle(r: com.mitv.trademaster.analysis.AnalysisResult, language: String) {
+    val (color, icon, dirLabel) = when (r.nextCandlePrediction) {
+        Direction.UP -> Triple(BrandGreen, Icons.Filled.TrendingUp, if (language == "ur") "اوپر" else "UP")
+        Direction.DOWN -> Triple(BrandRed, Icons.Filled.TrendingDown, if (language == "ur") "نیچے" else "DOWN")
+        Direction.NEUTRAL -> Triple(BrandSilverDim, Icons.Filled.TrendingFlat, if (language == "ur") "غیر واضح" else "NEUTRAL")
+    }
+
+    val infiniteTransition = rememberInfiniteTransition(label = "scanRing")
+    val rotation by infiniteTransition.animateFloat(
+        initialValue = 0f, targetValue = 360f,
+        animationSpec = infiniteRepeatable(animation = tween(3200, easing = LinearEasing)),
+        label = "rotation"
+    )
+    val animatedProgress by animateFloatAsState(
+        targetValue = r.nextCandleConfidencePercent / 100f,
+        animationSpec = tween(900), label = "progress"
+    )
+
+    Card(
+        colors = CardDefaults.cardColors(containerColor = PanelDark),
+        shape = RoundedCornerShape(24.dp),
+        border = androidx.compose.foundation.BorderStroke(1.dp, color.copy(alpha = 0.3f)),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(vertical = 26.dp, horizontal = 16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(
+                if (language == "ur") "اے آئی نیکسٹ کینڈل پریڈکٹر" else "AI NEXT CANDLE PREDICTOR",
+                color = BrandSilverDim, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp
+            )
+            Spacer(Modifier.height(18.dp))
+
+            Box(modifier = Modifier.size(180.dp), contentAlignment = Alignment.Center) {
+                // Rotating dashed scan ring — purely decorative "AI analyzing" feel.
+                Canvas(modifier = Modifier.fillMaxSize()) {
+                    rotate(rotation) {
+                        drawArc(
+                            color = color.copy(alpha = 0.25f),
+                            startAngle = 0f, sweepAngle = 100f, useCenter = false,
+                            style = androidx.compose.ui.graphics.drawscope.Stroke(width = 3.dp.toPx(), cap = StrokeCap.Round)
+                        )
+                        drawArc(
+                            color = color.copy(alpha = 0.25f),
+                            startAngle = 180f, sweepAngle = 100f, useCenter = false,
+                            style = androidx.compose.ui.graphics.drawscope.Stroke(width = 3.dp.toPx(), cap = StrokeCap.Round)
+                        )
+                    }
+                }
+                // Confidence progress ring.
+                Canvas(modifier = Modifier.fillMaxSize().padding(14.dp)) {
+                    drawArc(
+                        color = LineSubtle,
+                        startAngle = -90f, sweepAngle = 360f, useCenter = false,
+                        style = androidx.compose.ui.graphics.drawscope.Stroke(width = 10.dp.toPx(), cap = StrokeCap.Round)
+                    )
+                    drawArc(
+                        color = color,
+                        startAngle = -90f, sweepAngle = 360f * animatedProgress, useCenter = false,
+                        style = androidx.compose.ui.graphics.drawscope.Stroke(width = 10.dp.toPx(), cap = StrokeCap.Round)
+                    )
+                }
+                // Center content: icon, direction, confidence %.
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Icon(icon, contentDescription = null, tint = color, modifier = Modifier.size(30.dp))
+                    Spacer(Modifier.height(4.dp))
+                    Text(dirLabel, color = color, fontSize = 24.sp, fontWeight = FontWeight.Black)
+                    Text(
+                        "${r.nextCandleConfidencePercent}% " + (if (language == "ur") "اعتماد" else "confidence"),
+                        color = BrandSilver, fontSize = 11.sp, fontWeight = FontWeight.SemiBold
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(18.dp))
+            Text(
+                r.predictedCloseRelativeToOpen,
+                color = BrandSilverDim, fontSize = 12.5.sp, lineHeight = 18.sp,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                modifier = Modifier.fillMaxWidth(0.9f)
+            )
+
+            if (r.detectedPatterns.isNotEmpty()) {
+                Spacer(Modifier.height(14.dp))
+                androidx.compose.foundation.lazy.LazyRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    androidx.compose.foundation.lazy.items(r.detectedPatterns) { p ->
+                        val pColor = when (p.nextCandleBias) {
+                            Direction.UP -> BrandGreen
+                            Direction.DOWN -> BrandRed
+                            Direction.NEUTRAL -> BrandSilverDim
+                        }
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(20.dp))
+                                .background(pColor.copy(alpha = 0.14f))
+                                .padding(horizontal = 12.dp, vertical = 7.dp)
+                        ) {
+                            Text(
+                                if (language == "ur") p.nameUr else p.nameEn,
+                                color = pColor, fontSize = 11.sp, fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun DownloadAnalysisButton(
+    language: String,
+    isExporting: Boolean,
+    exportedUri: Uri?,
+    onDownload: () -> Unit,
+) {
+    Button(
+        onClick = onDownload,
+        enabled = !isExporting,
+        colors = ButtonDefaults.buttonColors(containerColor = PanelDark, contentColor = BrandGreen),
+        border = androidx.compose.foundation.BorderStroke(1.dp, BrandGreenDim),
+        shape = RoundedCornerShape(14.dp),
+        modifier = Modifier.fillMaxWidth().height(50.dp)
+    ) {
+        if (isExporting) {
+            CircularProgressIndicator(modifier = Modifier.size(18.dp), color = BrandGreen, strokeWidth = 2.dp)
+        } else {
+            Icon(
+                if (exportedUri != null) Icons.Filled.Share else Icons.Filled.Download,
+                contentDescription = null, modifier = Modifier.size(18.dp)
+            )
+            Spacer(Modifier.width(8.dp))
+            Text(
+                if (exportedUri != null) {
+                    if (language == "ur") "دوبارہ شیئر کریں" else "Share Again"
+                } else {
+                    if (language == "ur") "تجزیہ شدہ تصویر ڈاؤن لوڈ کریں" else "Download Analyzed Chart Image"
+                },
+                fontSize = 13.5.sp, fontWeight = FontWeight.SemiBold
+            )
         }
     }
 }

@@ -116,60 +116,73 @@ fun PracticeScreen(language: String) {
     // Instead of a fake ticking price line, we simulate the CURRENT candle actually
     // forming tick-by-tick (open fixed, high/low/close updating live) — this is what
     // gives a real trading-demo feel instead of a static chart with a dashed line.
-    LaunchedEffect(candles.size, timeframeSeconds, gameState) {
+    //
+    // IMPORTANT: this effect is keyed ONLY on (timeframeSeconds, gameState) and runs
+    // its OWN internal while-loop for as long as we're PLAYING. Previously this was
+    // keyed on candles.size as well, which meant every time a candle finished and
+    // got appended, Compose cancelled this coroutine and started a brand new one —
+    // and under any recomposition timing hiccup the chart could simply stall with
+    // no new effect picking up the next candle. Keeping ONE long-lived loop alive
+    // for the whole PLAYING session guarantees the chart never stops on its own.
+    LaunchedEffect(timeframeSeconds, gameState) {
         if (gameState != GameState.PLAYING) return@LaunchedEffect
-        val open = candles.last().close
-        var close = open
-        var high = open
-        var low = open
-        val totalTicks = ((timeframeSeconds * 1000L) / TICK_MS).toInt().coerceAtLeast(4)
 
-        secondsLeft = timeframeSeconds.toFloat()
-        formingCandle = DemoCandle(open, close, high, low, forming = true)
+        while (gameState == GameState.PLAYING) {
+            val open = candles.last().close
+            var close = open
+            var high = open
+            var low = open
+            val totalTicks = ((timeframeSeconds * 1000L) / TICK_MS).toInt().coerceAtLeast(4)
 
-        for (tick in 1..totalTicks) {
-            delay(TICK_MS)
-            val drift = Random.nextFloat() * 1.3f - 0.62f // very slight upward bias so charts don't feel dead-flat
-            close = (close + drift).coerceAtLeast(0.5f)
-            high = max(high, close)
-            low = min(low, close)
+            secondsLeft = timeframeSeconds.toFloat()
             formingCandle = DemoCandle(open, close, high, low, forming = true)
-            secondsLeft = (timeframeSeconds - (tick * TICK_MS) / 1000f).coerceAtLeast(0f)
-        }
 
-        // Candle closes — settle the trade.
-        isSettling = true
-        delay(500)
-        val guess = pendingGuess
-        val entry = entryPrice
-        val correct = if (guess != null && entry != null) guess == (close >= entry) else null
-        val final = DemoCandle(open, close, high, low, tradeResult = correct, entryPrice = entry)
-        if (guess != null && correct != null) {
-            if (correct) {
-                wins++; balance += tradeAmount; soundManager.playSuccess()
-                currentStreak = if (currentStreak >= 0) currentStreak + 1 else 1
-                if (currentStreak > bestWinStreak) bestWinStreak = currentStreak
+            for (tick in 1..totalTicks) {
+                delay(TICK_MS)
+                val drift = Random.nextFloat() * 1.3f - 0.62f // very slight upward bias so charts don't feel dead-flat
+                close = (close + drift).coerceAtLeast(0.5f)
+                high = max(high, close)
+                low = min(low, close)
+                formingCandle = DemoCandle(open, close, high, low, forming = true)
+                secondsLeft = (timeframeSeconds - (tick * TICK_MS) / 1000f).coerceAtLeast(0f)
+            }
+
+            // Candle closes — settle the trade.
+            isSettling = true
+            delay(500)
+            val guess = pendingGuess
+            val entry = entryPrice
+            val correct = if (guess != null && entry != null) guess == (close >= entry) else null
+            val final = DemoCandle(open, close, high, low, tradeResult = correct, entryPrice = entry)
+            if (guess != null && correct != null) {
+                if (correct) {
+                    wins++; balance += tradeAmount; soundManager.playSuccess()
+                    currentStreak = if (currentStreak >= 0) currentStreak + 1 else 1
+                    if (currentStreak > bestWinStreak) bestWinStreak = currentStreak
+                } else {
+                    losses++; balance -= tradeAmount; soundManager.playError()
+                    currentStreak = if (currentStreak <= 0) currentStreak - 1 else -1
+                }
+                authRepo.currentUser?.uid?.let { uid ->
+                    scope.launch { runCatching { firestoreRepo.recordPracticeTradeResult(uid, correct) } }
+                }
+                lastExplanation = explainCandle(final, language, entry)
+                entry?.let { e -> tradeHistory = (tradeHistory + TradeLogEntry(guess, correct, e, close, tradeAmount)).takeLast(20) }
             } else {
-                losses++; balance -= tradeAmount; soundManager.playError()
-                currentStreak = if (currentStreak <= 0) currentStreak - 1 else -1
+                lastExplanation = null
             }
-            authRepo.currentUser?.uid?.let { uid ->
-                scope.launch { runCatching { firestoreRepo.recordPracticeTradeResult(uid, correct) } }
-            }
-            lastExplanation = explainCandle(final, language, entry)
-            entry?.let { e -> tradeHistory = (tradeHistory + TradeLogEntry(guess, correct, e, close, tradeAmount)).takeLast(20) }
-        } else {
-            lastExplanation = null
-        }
-        candles = (candles + final).takeLast(24)
-        formingCandle = null
-        pendingGuess = null
-        entryPrice = null
-        isSettling = false
+            candles = (candles + final).takeLast(24)
+            formingCandle = null
+            pendingGuess = null
+            entryPrice = null
+            isSettling = false
 
-        if (balance <= 0f || balance >= targetBalance) {
-            delay(1000)
-            gameState = GameState.FINISHED
+            if (balance <= 0f || balance >= targetBalance) {
+                delay(1000)
+                gameState = GameState.FINISHED
+                break
+            }
+            // Loop immediately continues to the next candle — chart never stops.
         }
     }
 
