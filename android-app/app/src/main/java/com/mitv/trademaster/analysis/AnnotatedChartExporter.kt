@@ -119,35 +119,67 @@ object AnnotatedChartExporter {
             }
 
             if (rawCandles.isNotEmpty()) {
-                val minVal = rawCandles.minOf { it.top }
-                val maxVal = rawCandles.maxOf { it.bottom }
+                // Pad the value range a bit so the tallest wicks don't touch
+                // the very top/bottom of the chart area — real charts always
+                // leave a little breathing room above/below price action.
+                val rawMin = rawCandles.minOf { it.top }
+                val rawMax = rawCandles.maxOf { it.bottom }
+                val rawRange = (rawMax - rawMin).coerceAtLeast(1)
+                val pad = (rawRange * 0.08).toInt().coerceAtLeast(1)
+                val minVal = rawMin - pad
+                val maxVal = rawMax + pad
                 val valRange = (maxVal - minVal).coerceAtLeast(1)
 
                 fun mapY(v: Int): Float = chartBottom - ((v - minVal).toFloat() / valRange) * chartH
 
                 val count = rawCandles.size
                 val slotW = chartW / count
-                val bodyW = (slotW * 0.55f).coerceAtLeast(2f)
+                // Real candlestick charts pack candles tightly — body width
+                // is the large majority of each slot with only a hairline
+                // gap, not the ~45% empty gap the old version had.
+                val bodyW = (slotW * 0.72f).coerceIn(3f, 34f)
+                val minBodyPx = 3f // smallest visible body height, so doji-like candles still read as a candle, not a dot
 
                 rawCandles.forEachIndexed { i, c ->
                     val cx = chartLeft + slotW * i + slotW / 2f
                     val color = if (c.isBullish) green else red
-                    val wickPaint = Paint().apply { this.color = color; strokeWidth = 2f; isAntiAlias = true }
-                    val bodyPaint = Paint().apply { this.color = color; isAntiAlias = true }
 
+                    // Wick: thin centered line spanning the full high-low range.
+                    val wickPaint = Paint().apply { this.color = color; strokeWidth = 2.2f; isAntiAlias = true }
                     canvas.drawLine(cx, mapY(c.top), cx, mapY(c.bottom), wickPaint)
-                    val bodyTop = mapY(max(c.bodyTop, c.top))
-                    val bodyBottom = mapY(min(c.bodyBottom, c.bottom))
+
+                    // Body: filled rect for open-close range, with a faint
+                    // border so bodies read distinctly against each other
+                    // even when packed tightly, matching real chart styling.
+                    val bodyTopY = mapY(max(c.bodyTop, c.top))
+                    val bodyBottomY = mapY(min(c.bodyBottom, c.bottom))
+                    val top = min(bodyTopY, bodyBottomY)
+                    val bottom = max(bodyTopY, bodyBottomY).coerceAtLeast(top + minBodyPx)
+
+                    val bodyPaint = Paint().apply { this.color = color; isAntiAlias = true }
+                    val bodyRect = RectF(cx - bodyW / 2, top, cx + bodyW / 2, bottom)
+                    canvas.drawRect(bodyRect, bodyPaint)
                     canvas.drawRect(
-                        RectF(
-                            cx - bodyW / 2,
-                            min(bodyTop, bodyBottom),
-                            cx + bodyW / 2,
-                            max(bodyTop, bodyBottom).coerceAtLeast(min(bodyTop, bodyBottom) + 3f)
-                        ),
-                        bodyPaint
+                        bodyRect,
+                        Paint().apply {
+                            this.color = Color.argb(90, 5, 8, 10)
+                            style = Paint.Style.STROKE
+                            strokeWidth = 1f
+                            isAntiAlias = true
+                        }
                     )
                 }
+
+                // Faint current-price line at the last candle's close, like a real ticker line.
+                val lastMid = (rawCandles.last().bodyTop + rawCandles.last().bodyBottom) / 2
+                val priceLineY = mapY(lastMid)
+                canvas.drawLine(
+                    chartLeft, priceLineY, chartRight, priceLineY,
+                    Paint().apply {
+                        color = silver; alpha = 70; strokeWidth = 1.5f
+                        pathEffect = android.graphics.DashPathEffect(floatArrayOf(6f, 6f), 0f)
+                    }
+                )
 
                 result.supportLevelPercent?.let { pct ->
                     val v = minVal + (valRange * (1 - pct / 100.0)).toInt()

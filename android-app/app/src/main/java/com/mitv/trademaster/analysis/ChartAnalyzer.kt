@@ -178,7 +178,7 @@ object ChartAnalyzer {
         val detectedPatterns = detectNamedPatterns(candles)
         val microPatterns = detectMicroPatterns(candles)
         val indicators = computeIndicators(candles, direction, strength, volatility, srNote)
-        val (nextDir, nextConfidence) = predictNextCandle(direction, strength, detectedPatterns, srNote, indicators)
+        val (nextDir, nextConfidence) = predictNextCandle(direction, strength, detectedPatterns, srNote, indicators, candleIntervalMinutes, tradeDurationMinutes, volatility)
 
         var confidence = when {
             strength > 0.6 -> Confidence.HIGH
@@ -599,6 +599,9 @@ object ChartAnalyzer {
         patterns: List<CandlePattern>,
         srNote: String,
         indicators: List<IndicatorReading>,
+        candleIntervalMinutes: Int? = null,
+        tradeDurationMinutes: Int? = null,
+        volatility: Double = 0.0,
     ): Pair<Direction, Int> {
         var upScore = 0.0
         var downScore = 0.0
@@ -635,7 +638,42 @@ object ChartAnalyzer {
         if (srNote.contains("resistance")) downScore += 0.15
 
         val total = (upScore + downScore).coerceAtLeast(0.01)
-        val upPct = (upScore / total * 100).coerceIn(0.0, 100.0)
+        var upPct = (upScore / total * 100).coerceIn(0.0, 100.0)
+
+        // ---- Time-window adjustment ----
+        // This is the piece that was missing: the circle/exported-image
+        // confidence used to ignore the user's own candle-interval and
+        // trade-duration entirely. A 1-2 minute trade sitting on a 1-minute
+        // chart is asking "what does the VERY NEXT candle do" — that's the
+        // most grounded, highest-confidence call this analyzer can make,
+        // since it's reading momentum one candle ahead of what it just
+        // measured. A longer window (e.g. holding through 5-10 candles)
+        // is inherently less certain, because more can change before it
+        // resolves. We express this as a symmetric pull toward/away from
+        // 50% based on how many candles the window spans, mirroring the
+        // same discount curve used in buildTradeSuggestion() below so the
+        // two numbers the user sees (circle + trade suggestion) agree.
+        if (candleIntervalMinutes != null && candleIntervalMinutes > 0 && tradeDurationMinutes != null && tradeDurationMinutes > 0) {
+            val candlesInWindow = (tradeDurationMinutes.toDouble() / candleIntervalMinutes).coerceAtLeast(0.5)
+
+            // How far the current read already is from a coin-flip (0-50 scale).
+            val edge = upPct - 50.0
+
+            val windowConfidenceMultiplier = when {
+                candlesInWindow <= 1.5 -> 1.08  // next 1-2 min on a matching-interval chart: sharpen the call slightly
+                candlesInWindow <= 3.0 -> 1.0
+                candlesInWindow <= 6.0 -> 0.82
+                else -> 0.65
+            }
+
+            // Choppy/high-volatility conditions blunt short-window confidence too —
+            // a clean 1-minute read is only "sharp" if the tape isn't whipsawing.
+            val choppinessMultiplier = if (volatility > 0.6 && candlesInWindow <= 3.0) 0.85 else 1.0
+
+            val adjustedEdge = edge * windowConfidenceMultiplier * choppinessMultiplier
+            upPct = (50.0 + adjustedEdge).coerceIn(5.0, 95.0)
+        }
+
         val downPct = 100.0 - upPct
 
         return if (upPct >= downPct) {
