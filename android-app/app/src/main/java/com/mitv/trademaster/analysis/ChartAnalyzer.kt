@@ -22,6 +22,20 @@ import kotlin.math.min
 enum class Direction { UP, DOWN, NEUTRAL }
 enum class Confidence { LOW, MEDIUM, HIGH }
 
+/**
+ * A single computed technical indicator reading, shown to the user as part
+ * of "the bot looked at these indicators before deciding" — mirrors what a
+ * real trading terminal shows (RSI, moving-average bias, volatility) so the
+ * final call isn't a black box.
+ */
+data class IndicatorReading(
+    val nameEn: String,
+    val nameUr: String,
+    val valueLabel: String, // e.g. "68 (Overbought)", "Rising", "High"
+    val bias: Direction,
+    val weight: Double,
+)
+
 data class AnalysisResult(
     val direction: Direction,
     val confidence: Confidence,
@@ -41,6 +55,17 @@ data class AnalysisResult(
     val nextCandleConfidencePercent: Int = 0,
     val detectedPatterns: List<CandlePattern> = emptyList(),
     val predictedCloseRelativeToOpen: String = "", // human-readable e.g. "likely to close above current level"
+    // ---- Indicators & richer context (for the "full signal bot" upgrade) ----
+    val indicators: List<IndicatorReading> = emptyList(),
+    val detectedPairName: String? = null, // OCR-detected symbol, e.g. "EUR/USD"
+    val entryReferencePrice: Double? = null, // relative y-position turned into a 0-100 "level" for marking on the chart
+    val supportLevelPercent: Int? = null, // where support sits, as % from top of image (for drawing a line)
+    val resistanceLevelPercent: Int? = null,
+    val microPatterns: List<String> = emptyList(), // very small/short-lived shapes (tiny wicks, micro-dojis, pin-bars) called out separately from the main named patterns
+    val volatilityLabel: String = "",
+    val candleIntervalMinutes: Int? = null,
+    val tradeDurationMinutes: Int? = null,
+    val exportCandles: List<ExportCandle> = emptyList(),
 )
 
 /**
@@ -115,11 +140,20 @@ object ChartAnalyzer {
     fun analyze(bitmap: Bitmap): AnalysisResult = analyze(bitmap, candleIntervalMinutes = null, tradeDurationMinutes = null)
 
     /**
-     * Same pattern analysis as the base [analyze], plus an optional
-     * time-scoped [TradeSuggestion] when the user has told us their chart's
-     * candle interval and how long they plan to hold the trade.
+     * Full analysis pass: pattern recognition + indicator computation +
+     * next-candle prediction, all time-aware when the user has supplied
+     * their chart's candle interval and intended trade duration.
+     *
+     * [detectedPairName] is optional OCR output (see PairNameDetector) —
+     * when supplied it's carried straight through to the result/export so
+     * the downloadable image can show "EUR/USD" instead of nothing.
      */
-    fun analyze(bitmap: Bitmap, candleIntervalMinutes: Int?, tradeDurationMinutes: Int?): AnalysisResult {
+    fun analyze(
+        bitmap: Bitmap,
+        candleIntervalMinutes: Int?,
+        tradeDurationMinutes: Int?,
+        detectedPairName: String? = null,
+    ): AnalysisResult {
         val candles = segmentCandles(bitmap)
 
         if (candles.size < 3) {
@@ -131,6 +165,9 @@ object ChartAnalyzer {
                     "candlesticks to analyze. Try cropping closer to the chart area with good contrast.",
                 srNote = "",
                 candlesDetected = candles.size,
+                detectedPairName = detectedPairName,
+                candleIntervalMinutes = candleIntervalMinutes,
+                tradeDurationMinutes = tradeDurationMinutes,
             )
         }
 
@@ -139,7 +176,9 @@ object ChartAnalyzer {
         val srNote = supportResistanceNote(candles, bitmap.height)
         val volatility = recentVolatility(candles)
         val detectedPatterns = detectNamedPatterns(candles)
-        val (nextDir, nextConfidence) = predictNextCandle(direction, strength, detectedPatterns, srNote)
+        val microPatterns = detectMicroPatterns(candles)
+        val indicators = computeIndicators(candles, direction, strength, volatility, srNote)
+        val (nextDir, nextConfidence) = predictNextCandle(direction, strength, detectedPatterns, srNote, indicators)
 
         var confidence = when {
             strength > 0.6 -> Confidence.HIGH
@@ -166,6 +205,8 @@ object ChartAnalyzer {
             if (srNote.isNotBlank()) add(srNote)
             add("Candles analyzed: ${candles.size}")
             detectedPatterns.forEach { add("Pattern found: ${it.nameEn} → ${it.nextCandleBias.name.lowercase()} bias") }
+            indicators.forEach { add("${it.nameEn}: ${it.valueLabel}") }
+            microPatterns.forEach { add("Micro-signal: $it") }
         }
 
         val leanStatement = when (direction) {
@@ -186,6 +227,34 @@ object ChartAnalyzer {
 
         val matchedStrategies = detectStrategies(candles, direction, strength, srNote, volatility)
 
+        // Support/resistance as % from top of image, for drawing reference lines on the exported chart.
+        val recentSlice = candles.takeLast(min(candles.size, 20))
+        val supportPct = if (recentSlice.isNotEmpty() && bitmap.height > 0) {
+            ((recentSlice.map { it.bottom }.max().toDouble() / bitmap.height) * 100).toInt().coerceIn(0, 100)
+        } else null
+        val resistancePct = if (recentSlice.isNotEmpty() && bitmap.height > 0) {
+            ((recentSlice.map { it.top }.min().toDouble() / bitmap.height) * 100).toInt().coerceIn(0, 100)
+        } else null
+        val entryRefPct = if (bitmap.height > 0) {
+            (candles.last().let { (it.top + it.bottom) / 2.0 } / bitmap.height) * 100
+        } else null
+
+        val volatilityLabel = when {
+            volatility > 0.7 -> "High"
+            volatility > 0.35 -> "Moderate"
+            else -> "Low"
+        }
+
+        val exportCandles = candles.takeLast(min(candles.size, 30)).map {
+            ExportCandle(
+                top = it.top,
+                bottom = it.bottom,
+                bodyTop = it.bodyTop,
+                bodyBottom = it.bodyBottom,
+                isBullish = it.isBullish,
+            )
+        }
+
         return AnalysisResult(
             direction = direction,
             confidence = confidence,
@@ -202,6 +271,16 @@ object ChartAnalyzer {
             nextCandleConfidencePercent = nextConfidence,
             detectedPatterns = detectedPatterns,
             predictedCloseRelativeToOpen = predictedCloseRelativeToOpen,
+            indicators = indicators,
+            detectedPairName = detectedPairName,
+            entryReferencePrice = entryRefPct,
+            supportLevelPercent = supportPct,
+            resistanceLevelPercent = resistancePct,
+            microPatterns = microPatterns,
+            volatilityLabel = volatilityLabel,
+            candleIntervalMinutes = candleIntervalMinutes,
+            tradeDurationMinutes = tradeDurationMinutes,
+            exportCandles = exportCandles,
         )
     }
 
@@ -519,6 +598,7 @@ object ChartAnalyzer {
         trendStrength: Double,
         patterns: List<CandlePattern>,
         srNote: String,
+        indicators: List<IndicatorReading>,
     ): Pair<Direction, Int> {
         var upScore = 0.0
         var downScore = 0.0
@@ -539,6 +619,17 @@ object ChartAnalyzer {
             }
         }
 
+        // Each indicator votes with its own weight — this is what makes the
+        // final call "trend + patterns + indicators combined" rather than
+        // trend/pattern alone.
+        indicators.forEach { ind ->
+            when (ind.bias) {
+                Direction.UP -> upScore += ind.weight
+                Direction.DOWN -> downScore += ind.weight
+                Direction.NEUTRAL -> { upScore += ind.weight * 0.15; downScore += ind.weight * 0.15 }
+            }
+        }
+
         // Support/resistance context nudges the relevant side slightly.
         if (srNote.contains("support")) upScore += 0.15
         if (srNote.contains("resistance")) downScore += 0.15
@@ -553,6 +644,147 @@ object ChartAnalyzer {
             Direction.DOWN to downPct.toInt().coerceIn(50, 96)
         }
     }
+
+    /**
+     * Computes a small set of classic technical indicators from the
+     * detected candle sequence — the goal is for the final call to be
+     * "trend + patterns + indicators combined", the way a real analyst
+     * cross-checks momentum before committing to a direction, rather than
+     * slope alone.
+     */
+    private fun computeIndicators(
+        candles: List<Candle>,
+        direction: Direction,
+        strength: Double,
+        volatility: Double,
+        srNote: String,
+    ): List<IndicatorReading> {
+        val readings = mutableListOf<IndicatorReading>()
+        val recent = candles.takeLast(min(candles.size, 14))
+
+        // ---- RSI-style momentum (simplified) ----
+        if (recent.size >= 5) {
+            var gains = 0.0
+            var losses = 0.0
+            for (c in recent) {
+                if (c.isBullish) gains += c.bodySize else losses += c.bodySize
+            }
+            val totalMove = (gains + losses).coerceAtLeast(1.0)
+            val rsiLike = (gains / totalMove * 100)
+            val rsiLabel = when {
+                rsiLike > 70 -> "${rsiLike.toInt()} (Overbought)"
+                rsiLike < 30 -> "${rsiLike.toInt()} (Oversold)"
+                else -> "${rsiLike.toInt()} (Neutral)"
+            }
+            val rsiBias = when {
+                rsiLike > 70 -> Direction.DOWN
+                rsiLike < 30 -> Direction.UP
+                rsiLike > 55 -> Direction.UP
+                rsiLike < 45 -> Direction.DOWN
+                else -> Direction.NEUTRAL
+            }
+            readings.add(IndicatorReading(
+                nameEn = "Momentum (RSI-style)", nameUr = "مومینٹم (RSI طرز)",
+                valueLabel = rsiLabel, bias = rsiBias, weight = 0.5,
+            ))
+        }
+
+        // ---- Moving-average style bias ----
+        if (candles.size >= 6) {
+            val third = candles.size / 3
+            val earlyAvg = candles.take(third).map { (it.top + it.bottom) / 2.0 }.average()
+            val lateAvg = candles.takeLast(third).map { (it.top + it.bottom) / 2.0 }.average()
+            val maBias = when {
+                lateAvg < earlyAvg - 2 -> Direction.UP
+                lateAvg > earlyAvg + 2 -> Direction.DOWN
+                else -> Direction.NEUTRAL
+            }
+            val maLabel = when (maBias) {
+                Direction.UP -> "Fast MA above Slow MA"
+                Direction.DOWN -> "Fast MA below Slow MA"
+                Direction.NEUTRAL -> "Flat / crossing"
+            }
+            readings.add(IndicatorReading(
+                nameEn = "Moving Average Bias", nameUr = "موونگ ایوریج رجحان",
+                valueLabel = maLabel, bias = maBias, weight = 0.45,
+            ))
+        }
+
+        // ---- Volatility reading ----
+        val volLabel = when {
+            volatility > 0.7 -> "High"
+            volatility > 0.35 -> "Moderate"
+            else -> "Low"
+        }
+        readings.add(IndicatorReading(
+            nameEn = "Volatility", nameUr = "اتار چڑھاؤ",
+            valueLabel = volLabel, bias = Direction.NEUTRAL, weight = 0.15,
+        ))
+
+        // ---- Support/Resistance strength ----
+        val srBias = when {
+            srNote.contains("support") -> Direction.UP
+            srNote.contains("resistance") -> Direction.DOWN
+            else -> Direction.NEUTRAL
+        }
+        val srLabel = when {
+            srNote.contains("support") -> "Near Support"
+            srNote.contains("resistance") -> "Near Resistance"
+            else -> "Mid-Range"
+        }
+        readings.add(IndicatorReading(
+            nameEn = "Support/Resistance", nameUr = "سپورٹ/ریزسٹنس",
+            valueLabel = srLabel, bias = srBias, weight = 0.35,
+        ))
+
+        // ---- Trend strength as its own indicator row ----
+        val trendLabel = when {
+            strength > 0.6 -> "Strong (${(strength * 100).toInt()}%)"
+            strength > 0.3 -> "Moderate (${(strength * 100).toInt()}%)"
+            else -> "Weak (${(strength * 100).toInt()}%)"
+        }
+        readings.add(IndicatorReading(
+            nameEn = "Trend Strength", nameUr = "رجحان کی طاقت",
+            valueLabel = trendLabel, bias = direction, weight = 0.5,
+        ))
+
+        return readings
+    }
+
+    /**
+     * Very small, short-lived shapes that don't rise to the level of a
+     * full named pattern (Doji/Hammer/etc.) but are still worth surfacing —
+     * e.g. a tiny pin-bar wick on the last few candles, or a sudden
+     * single-candle spike. Called out separately so the user can see the
+     * bot reading candle-by-candle detail, not just the big shapes.
+     */
+    private fun detectMicroPatterns(candles: List<Candle>): List<String> {
+        if (candles.size < 3) return emptyList()
+        val notes = mutableListOf<String>()
+        val last3 = candles.takeLast(3)
+        val avgRange = candles.takeLast(min(candles.size, 12)).map { it.range }.average().coerceAtLeast(1.0)
+
+        last3.forEachIndexed { idx, c ->
+            val label = when (idx) { 2 -> "Last candle"; 1 -> "2nd-last candle"; else -> "3rd-last candle" }
+            if (c.upperWick > c.bodySize * 3 && c.bodySize > 0) {
+                notes.add("$label: tiny upper wick spike — brief rejection at the high")
+            }
+            if (c.lowerWick > c.bodySize * 3 && c.bodySize > 0) {
+                notes.add("$label: tiny lower wick spike — brief rejection at the low")
+            }
+            if (c.range < avgRange * 0.25) {
+                notes.add("$label: micro-range candle — very low activity")
+            }
+        }
+
+        val smallBodyCount = last3.count { it.bodySize.toDouble() / it.range < 0.2 }
+        if (smallBodyCount >= 2) {
+            notes.add("Coiling detected — multiple small-bodied candles in a row, often precedes a bigger move")
+        }
+
+        return notes
+    }
+
     private fun recentVolatility(candles: List<Candle>): Double {
         val recent = candles.takeLast(min(candles.size, 15))
         if (recent.size < 3) return 0.0

@@ -47,6 +47,7 @@ import coil.compose.AsyncImage
 import com.mitv.trademaster.analysis.AnnotatedChartExporter
 import com.mitv.trademaster.analysis.ChartAnalyzer
 import com.mitv.trademaster.analysis.Direction
+import com.mitv.trademaster.analysis.PairNameDetector
 import com.mitv.trademaster.data.AuthRepository
 import com.mitv.trademaster.data.FirestoreRepository
 import com.mitv.trademaster.ui.theme.*
@@ -287,7 +288,10 @@ fun AnalyzerScreen(language: String = "en") {
                         if (bitmap == null) {
                             errorMsg = if (language == "ur") "تصویر نہیں پڑھی جا سکی" else "Could not read image"
                         } else {
-                            val r = withContext(Dispatchers.Default) { ChartAnalyzer.analyze(bitmap, candleInterval, tradeDuration) }
+                            val pairName = withContext(Dispatchers.Default) { runCatching { PairNameDetector.detect(bitmap) }.getOrNull() }
+                            val r = withContext(Dispatchers.Default) {
+                                ChartAnalyzer.analyze(bitmap, candleInterval, tradeDuration, pairName)
+                            }
                             result = r
                             analyzedBitmap = bitmap
                             exportedUri = null
@@ -318,16 +322,17 @@ fun AnalyzerScreen(language: String = "en") {
             Spacer(Modifier.height(18.dp))
             NextCandlePredictorCircle(r, language)
             Spacer(Modifier.height(14.dp))
+            IndicatorsPanel(r, language)
+            Spacer(Modifier.height(14.dp))
             DownloadAnalysisButton(
                 language = language,
                 isExporting = isExporting,
                 exportedUri = exportedUri,
                 onDownload = {
                     tapFeedback()
-                    val bmp = analyzedBitmap ?: return@DownloadAnalysisButton
                     isExporting = true
                     scope.launch {
-                        val uri = withContext(Dispatchers.IO) { AnnotatedChartExporter.export(context, bmp, r) }
+                        val uri = withContext(Dispatchers.IO) { AnnotatedChartExporter.export(context, r.exportCandles, r) }
                         exportedUri = uri
                         isExporting = false
                         if (uri != null) {
@@ -580,6 +585,17 @@ private fun NextCandlePredictorCircle(r: com.mitv.trademaster.analysis.AnalysisR
                 if (language == "ur") "اے آئی نیکسٹ کینڈل پریڈکٹر" else "AI NEXT CANDLE PREDICTOR",
                 color = BrandSilverDim, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp
             )
+            if (r.detectedPairName != null || r.candleIntervalMinutes != null || r.tradeDurationMinutes != null) {
+                Spacer(Modifier.height(6.dp))
+                val metaText = buildString {
+                    r.detectedPairName?.let { append(it) }
+                    if (r.detectedPairName != null && (r.candleIntervalMinutes != null || r.tradeDurationMinutes != null)) append("  •  ")
+                    r.candleIntervalMinutes?.let { append("${it}m chart") }
+                    if (r.candleIntervalMinutes != null && r.tradeDurationMinutes != null) append("  •  ")
+                    r.tradeDurationMinutes?.let { append("${it}m trade") }
+                }
+                Text(metaText, color = BrandSilver, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+            }
             Spacer(Modifier.height(18.dp))
 
             Box(modifier = Modifier.size(180.dp), contentAlignment = Alignment.Center) {
@@ -655,6 +671,59 @@ private fun NextCandlePredictorCircle(r: com.mitv.trademaster.analysis.AnalysisR
                             )
                         }
                     }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun IndicatorsPanel(r: com.mitv.trademaster.analysis.AnalysisResult, language: String) {
+    Card(
+        colors = CardDefaults.cardColors(containerColor = PanelDark),
+        shape = RoundedCornerShape(18.dp),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
+            Text(
+                if (language == "ur") "انڈیکیٹرز" else "INDICATORS",
+                color = BrandSilverDim, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp
+            )
+            Spacer(Modifier.height(10.dp))
+            r.indicators.forEach { ind ->
+                val color = when (ind.bias) {
+                    Direction.UP -> BrandGreen
+                    Direction.DOWN -> BrandRed
+                    Direction.NEUTRAL -> BrandSilverDim
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        if (language == "ur") ind.nameUr else ind.nameEn,
+                        color = BrandSilver, fontSize = 12.5.sp, fontWeight = FontWeight.Medium
+                    )
+                    Text(ind.valueLabel, color = color, fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold)
+                }
+            }
+
+            if (r.microPatterns.isNotEmpty()) {
+                Spacer(Modifier.height(12.dp))
+                HorizontalDivider(color = LineSubtle)
+                Spacer(Modifier.height(10.dp))
+                Text(
+                    if (language == "ur") "مائیکرو سگنلز" else "MICRO-SIGNALS",
+                    color = BrandSilverDim, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp
+                )
+                Spacer(Modifier.height(8.dp))
+                r.microPatterns.forEach { m ->
+                    Text(
+                        "• $m",
+                        color = BrandSilverDim, fontSize = 12.sp, lineHeight = 17.sp,
+                        modifier = Modifier.padding(vertical = 2.dp)
+                    )
                 }
             }
         }

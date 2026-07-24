@@ -12,8 +12,8 @@ android {
         applicationId = "com.mitv.trademaster"
         minSdk = 26
         targetSdk = 34
-        versionCode = 9
-        versionName = "9.0.0"
+        versionCode = 8
+        versionName = "8.0.0"
 
         // Groq API key is NOT stored in the app — it's fetched at runtime from
         // Firestore (config/groq document), settable/rotatable from the admin
@@ -106,6 +106,11 @@ dependencies {
     implementation("androidx.media3:media3-exoplayer:1.4.1")
     implementation("androidx.media3:media3-ui:1.4.1")
     implementation("androidx.media3:media3-common:1.4.1")
+
+    // On-device OCR (ML Kit Text Recognition) — used by the chart Analyzer to
+    // read the pair/symbol name (e.g. "EUR/USD", "XAU/USD") directly off the
+    // uploaded chart screenshot. Fully offline, no API key, no network call.
+    implementation("com.google.mlkit:text-recognition:16.0.1")
 
     testImplementation("junit:junit:4.13.2")
     androidTestImplementation("androidx.test.ext:junit:1.2.1")
