@@ -11,40 +11,46 @@ import android.graphics.Typeface
 import androidx.core.content.FileProvider
 import java.io.File
 import java.io.FileOutputStream
-import kotlin.math.max
-import kotlin.math.min
 
 /**
- * Builds a full "signal bot" style report image from scratch: instead of
- * overlaying text on the user's original screenshot, this REDRAWS the
- * detected candles as a clean, simplified candlestick chart on a plain
- * background, then annotates it with everything the analyzer found —
- * pair name, chart timeframe, trade duration, next-candle direction arrow,
- * entry marker, support/resistance lines, matched patterns, and key
- * indicator readings. The result reads like a single self-contained
- * trading-signal card rather than a screenshot with a sticker on it.
+ * Takes the user's ORIGINAL chart screenshot and overlays the analyzer's
+ * findings directly on top of it — an entry marker + direction arrow at the
+ * real detected candle position, support/resistance lines at their real
+ * detected height, plus a header band (pair name, timeframe, trade
+ * duration, direction badge) and a footer info panel (patterns, indicators,
+ * micro-signals). Nothing is redrawn from scratch: the chart in the
+ * exported image is the user's own screenshot, just annotated — this reads
+ * as "their chart with our call marked on it" rather than a separate,
+ * unfamiliar-looking synthetic chart.
  */
 object AnnotatedChartExporter {
 
     /**
-     * [rawCandles] are the same lightweight per-column candle samples the
-     * analyzer used internally — passed through here so the redrawn chart
-     * matches what was actually analyzed, not a separate re-detection.
+     * [sourceBitmap] is the exact screenshot that was analyzed.
+     * [srcCandleTop]/[srcCandleBottom] give the real pixel Y-range (within
+     * [sourceBitmap]) that candle data was detected in, so support/
+     * resistance/entry markers line up with the actual chart instead of an
+     * approximated position.
      */
     fun export(
         context: Context,
-        rawCandles: List<ExportCandle>,
+        sourceBitmap: Bitmap,
         result: AnalysisResult,
     ): android.net.Uri? {
         return try {
-            val w = 1280
-            val h = 1600
-            val output = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+            val srcW = sourceBitmap.width
+            val srcH = sourceBitmap.height
+
+            val headerH = 190
+            val footerH = 480
+            val outW = srcW
+            val outH = srcH + headerH + footerH
+
+            val output = Bitmap.createBitmap(outW, outH, Bitmap.Config.ARGB_8888)
             val canvas = Canvas(output)
 
             val bg = Color.parseColor("#05080A")
             val panel = Color.parseColor("#0B1114")
-            val line = Color.parseColor("#1C2A2F")
             val green = Color.parseColor("#34E39A")
             val red = Color.parseColor("#FF5C6A")
             val silver = Color.parseColor("#CDD6D8")
@@ -52,19 +58,18 @@ object AnnotatedChartExporter {
 
             canvas.drawColor(bg)
 
-            // ---- Header band: pair name, timeframe, trade duration ----
-            val headerH = 190f
-            val headerPaint = Paint().apply { color = panel; isAntiAlias = true }
-            canvas.drawRect(RectF(0f, 0f, w.toFloat(), headerH), headerPaint)
-            canvas.drawLine(0f, headerH, w.toFloat(), headerH, Paint().apply { color = line; strokeWidth = 3f })
+            // ---- Header band: pair name, timeframe, trade duration, direction badge ----
+            canvas.drawRect(RectF(0f, 0f, outW.toFloat(), headerH.toFloat()), Paint().apply { color = panel; isAntiAlias = true })
 
+            val titleSize = (outW * 0.045f).coerceIn(34f, 56f)
             val pairPaint = Paint().apply {
-                color = silver; textSize = 56f; isAntiAlias = true
+                color = silver; textSize = titleSize; isAntiAlias = true
                 typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
             }
-            canvas.drawText(result.detectedPairName ?: "Chart Analysis", 36f, 80f, pairPaint)
+            canvas.drawText(result.detectedPairName ?: "Chart Analysis", outW * 0.03f, headerH * 0.42f, pairPaint)
 
-            val metaPaint = Paint().apply { color = silverDim; textSize = 30f; isAntiAlias = true }
+            val metaSize = (outW * 0.024f).coerceIn(20f, 30f)
+            val metaPaint = Paint().apply { color = silverDim; textSize = metaSize; isAntiAlias = true }
             val tf = result.candleIntervalMinutes
             val td = result.tradeDurationMinutes
             val metaLine = buildString {
@@ -73,152 +78,84 @@ object AnnotatedChartExporter {
                 if (td != null) append("Trade duration: ${td}m")
                 if (tf == null && td == null) append("Educational chart analysis")
             }
-            canvas.drawText(metaLine, 36f, 128f, metaPaint)
+            canvas.drawText(metaLine, outW * 0.03f, headerH * 0.7f, metaPaint)
 
-            val brandPaint = Paint().apply {
-                color = green; textSize = 26f; isAntiAlias = true
-                typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
-                textAlign = Paint.Align.RIGHT
-            }
-            canvas.drawText("MI TRADE MASTER", w - 36f, 60f, brandPaint)
-            val brandSubPaint = Paint().apply {
-                color = silverDim; textSize = 22f; isAntiAlias = true; textAlign = Paint.Align.RIGHT
-            }
-            canvas.drawText("AI Chart Analyzer", w - 36f, 90f, brandSubPaint)
-
-            // Big direction badge, top-right of header.
             val (dirColor, dirLabel, arrow) = when (result.nextCandlePrediction) {
                 Direction.UP -> Triple(green, "UP", "▲")
                 Direction.DOWN -> Triple(red, "DOWN", "▼")
                 Direction.NEUTRAL -> Triple(silverDim, "NEUTRAL", "◆")
             }
-            val badgeRect = RectF(w - 260f, 108f, w - 36f, 172f)
+            val badgeW = outW * 0.32f
+            val badgeRect = RectF(outW - badgeW - outW * 0.03f, headerH * 0.22f, outW - outW * 0.03f, headerH * 0.85f)
             canvas.drawRoundRect(
                 badgeRect, 14f, 14f,
-                Paint().apply { color = Color.argb(40, Color.red(dirColor), Color.green(dirColor), Color.blue(dirColor)) }
+                Paint().apply { color = Color.argb(45, Color.red(dirColor), Color.green(dirColor), Color.blue(dirColor)) }
             )
-            val badgeTextPaint = Paint().apply {
-                color = dirColor; textSize = 34f; isAntiAlias = true
-                typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
-                textAlign = Paint.Align.CENTER
-            }
-            canvas.drawText("$arrow $dirLabel ${result.nextCandleConfidencePercent}%", badgeRect.centerX(), badgeRect.centerY() + 12f, badgeTextPaint)
-
-            // ---- Chart area: redrawn candles on plain background ----
-            val chartTop = headerH + 30f
-            val chartBottom = h - 560f
-            val chartLeft = 70f
-            val chartRight = w - 70f
-            val chartH = chartBottom - chartTop
-            val chartW = chartRight - chartLeft
-
-            val gridPaint = Paint().apply { color = line; strokeWidth = 1.5f; isAntiAlias = true }
-            for (i in 1..3) {
-                val y = chartTop + chartH * i / 4
-                canvas.drawLine(chartLeft, y, chartRight, y, gridPaint)
-            }
-
-            if (rawCandles.isNotEmpty()) {
-                // Pad the value range a bit so the tallest wicks don't touch
-                // the very top/bottom of the chart area — real charts always
-                // leave a little breathing room above/below price action.
-                val rawMin = rawCandles.minOf { it.top }
-                val rawMax = rawCandles.maxOf { it.bottom }
-                val rawRange = (rawMax - rawMin).coerceAtLeast(1)
-                val pad = (rawRange * 0.08).toInt().coerceAtLeast(1)
-                val minVal = rawMin - pad
-                val maxVal = rawMax + pad
-                val valRange = (maxVal - minVal).coerceAtLeast(1)
-
-                fun mapY(v: Int): Float = chartBottom - ((v - minVal).toFloat() / valRange) * chartH
-
-                val count = rawCandles.size
-                val slotW = chartW / count
-                // Real candlestick charts pack candles tightly — body width
-                // is the large majority of each slot with only a hairline
-                // gap, not the ~45% empty gap the old version had.
-                val bodyW = (slotW * 0.72f).coerceIn(3f, 34f)
-                val minBodyPx = 3f // smallest visible body height, so doji-like candles still read as a candle, not a dot
-
-                rawCandles.forEachIndexed { i, c ->
-                    val cx = chartLeft + slotW * i + slotW / 2f
-                    val color = if (c.isBullish) green else red
-
-                    // Wick: thin centered line spanning the full high-low range.
-                    val wickPaint = Paint().apply { this.color = color; strokeWidth = 2.2f; isAntiAlias = true }
-                    canvas.drawLine(cx, mapY(c.top), cx, mapY(c.bottom), wickPaint)
-
-                    // Body: filled rect for open-close range, with a faint
-                    // border so bodies read distinctly against each other
-                    // even when packed tightly, matching real chart styling.
-                    val bodyTopY = mapY(max(c.bodyTop, c.top))
-                    val bodyBottomY = mapY(min(c.bodyBottom, c.bottom))
-                    val top = min(bodyTopY, bodyBottomY)
-                    val bottom = max(bodyTopY, bodyBottomY).coerceAtLeast(top + minBodyPx)
-
-                    val bodyPaint = Paint().apply { this.color = color; isAntiAlias = true }
-                    val bodyRect = RectF(cx - bodyW / 2, top, cx + bodyW / 2, bottom)
-                    canvas.drawRect(bodyRect, bodyPaint)
-                    canvas.drawRect(
-                        bodyRect,
-                        Paint().apply {
-                            this.color = Color.argb(90, 5, 8, 10)
-                            style = Paint.Style.STROKE
-                            strokeWidth = 1f
-                            isAntiAlias = true
-                        }
-                    )
+            val badgeTextSize = (outW * 0.032f).coerceIn(24f, 36f)
+            canvas.drawText(
+                "$arrow $dirLabel ${result.nextCandleConfidencePercent}%",
+                badgeRect.centerX(), badgeRect.centerY() + badgeTextSize * 0.35f,
+                Paint().apply {
+                    color = dirColor; textSize = badgeTextSize; isAntiAlias = true
+                    typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+                    textAlign = Paint.Align.CENTER
                 }
+            )
+            canvas.drawLine(0f, headerH.toFloat(), outW.toFloat(), headerH.toFloat(), Paint().apply { color = dirColor; strokeWidth = 3f })
 
-                // Faint current-price line at the last candle's close, like a real ticker line.
-                val lastMid = (rawCandles.last().bodyTop + rawCandles.last().bodyBottom) / 2
-                val priceLineY = mapY(lastMid)
-                canvas.drawLine(
-                    chartLeft, priceLineY, chartRight, priceLineY,
-                    Paint().apply {
-                        color = silver; alpha = 70; strokeWidth = 1.5f
-                        pathEffect = android.graphics.DashPathEffect(floatArrayOf(6f, 6f), 0f)
-                    }
+            // ---- The user's ORIGINAL chart, untouched, drawn between header and footer ----
+            canvas.drawBitmap(sourceBitmap, 0f, headerH.toFloat(), null)
+
+            // ---- Overlay markings positioned using REAL detected coordinates from the source image ----
+            val chartOffsetY = headerH.toFloat()
+
+            result.supportLevelPercent?.let { pct ->
+                val y = chartOffsetY + srcH * (1 - pct / 100f)
+                val srPaint = Paint().apply {
+                    color = green; strokeWidth = 3f
+                    pathEffect = android.graphics.DashPathEffect(floatArrayOf(16f, 10f), 0f)
+                    isAntiAlias = true
+                }
+                canvas.drawLine(0f, y, outW.toFloat(), y, srPaint)
+                canvas.drawText(
+                    "Support", 12f, y - 10f,
+                    Paint().apply { color = green; textSize = 26f; isAntiAlias = true; setShadowLayer(4f, 0f, 0f, Color.BLACK) }
                 )
-
-                result.supportLevelPercent?.let { pct ->
-                    val v = minVal + (valRange * (1 - pct / 100.0)).toInt()
-                    val y = mapY(v).coerceIn(chartTop, chartBottom)
-                    val srPaint = Paint().apply {
-                        color = green; strokeWidth = 2.5f
-                        pathEffect = android.graphics.DashPathEffect(floatArrayOf(14f, 10f), 0f)
-                    }
-                    canvas.drawLine(chartLeft, y, chartRight, y, srPaint)
-                    canvas.drawText("Support", chartLeft + 8f, y - 10f, Paint().apply { color = green; textSize = 24f; isAntiAlias = true })
+            }
+            result.resistanceLevelPercent?.let { pct ->
+                val y = chartOffsetY + srcH * (1 - pct / 100f)
+                val srPaint = Paint().apply {
+                    color = red; strokeWidth = 3f
+                    pathEffect = android.graphics.DashPathEffect(floatArrayOf(16f, 10f), 0f)
+                    isAntiAlias = true
                 }
-                result.resistanceLevelPercent?.let { pct ->
-                    val v = minVal + (valRange * (1 - pct / 100.0)).toInt()
-                    val y = mapY(v).coerceIn(chartTop, chartBottom)
-                    val srPaint = Paint().apply {
-                        color = red; strokeWidth = 2.5f
-                        pathEffect = android.graphics.DashPathEffect(floatArrayOf(14f, 10f), 0f)
-                    }
-                    canvas.drawLine(chartLeft, y, chartRight, y, srPaint)
-                    canvas.drawText("Resistance", chartLeft + 8f, y - 10f, Paint().apply { color = red; textSize = 24f; isAntiAlias = true })
-                }
+                canvas.drawLine(0f, y, outW.toFloat(), y, srPaint)
+                canvas.drawText(
+                    "Resistance", 12f, y - 10f,
+                    Paint().apply { color = red; textSize = 26f; isAntiAlias = true; setShadowLayer(4f, 0f, 0f, Color.BLACK) }
+                )
+            }
 
-                val lastCandle = rawCandles.last()
-                val lastX = chartLeft + slotW * (count - 1) + slotW / 2f
-                val entryY = mapY((lastCandle.top + lastCandle.bottom) / 2)
+            // Entry marker + next-candle direction arrow, placed at the last
+            // detected candle's real position (right edge of the chart,
+            // vertically at its actual entry-reference level).
+            result.entryReferencePrice?.let { entryPct ->
+                val entryX = outW * 0.90f
+                val entryY = chartOffsetY + srcH * (entryPct / 100f).toFloat()
 
-                canvas.drawCircle(lastX, entryY, 8f, Paint().apply { color = silver; isAntiAlias = true })
+                canvas.drawCircle(entryX, entryY, 10f, Paint().apply { color = silver; isAntiAlias = true; setShadowLayer(6f, 0f, 0f, Color.BLACK) })
                 canvas.drawCircle(
-                    lastX, entryY, 14f,
-                    Paint().apply { color = silver; style = Paint.Style.STROKE; strokeWidth = 2.5f; isAntiAlias = true }
+                    entryX, entryY, 17f,
+                    Paint().apply { color = silver; style = Paint.Style.STROKE; strokeWidth = 3f; isAntiAlias = true }
                 )
 
-                val arrowLen = 90f
-                val arrowEndY = if (result.nextCandlePrediction == Direction.UP) entryY - arrowLen else entryY + arrowLen
-                val arrowX = (lastX + 70f).coerceAtMost(chartRight - 20f)
                 if (result.nextCandlePrediction != Direction.NEUTRAL) {
-                    val arrowPaint = Paint().apply { color = dirColor; strokeWidth = 5f; isAntiAlias = true; style = Paint.Style.STROKE }
-                    canvas.drawLine(lastX, entryY, arrowX, arrowEndY, arrowPaint)
-                    val headSize = 16f
+                    val arrowLen = srcH * 0.09f
+                    val arrowEndY = if (result.nextCandlePrediction == Direction.UP) entryY - arrowLen else entryY + arrowLen
+                    val arrowX = (entryX + outW * 0.05f).coerceAtMost(outW - 20f)
+                    val arrowPaint = Paint().apply { color = dirColor; strokeWidth = 6f; isAntiAlias = true; style = Paint.Style.STROKE; setShadowLayer(5f, 0f, 0f, Color.BLACK) }
+                    canvas.drawLine(entryX, entryY, arrowX, arrowEndY, arrowPaint)
+                    val headSize = 18f
                     val dirSign = if (result.nextCandlePrediction == Direction.UP) -1 else 1
                     val path = Path().apply {
                         moveTo(arrowX, arrowEndY)
@@ -228,72 +165,72 @@ object AnnotatedChartExporter {
                     }
                     canvas.drawPath(path, Paint().apply { color = dirColor; isAntiAlias = true })
                 }
-            } else {
-                canvas.drawText(
-                    "No candle data to redraw", w / 2f, (chartTop + chartBottom) / 2,
-                    Paint().apply { color = silverDim; textSize = 30f; isAntiAlias = true; textAlign = Paint.Align.CENTER }
-                )
             }
 
-            // ---- Bottom info panel: patterns, indicators, micro-signals ----
-            val panelTop = chartBottom + 20f
-            canvas.drawRect(RectF(0f, panelTop, w.toFloat(), h.toFloat()), Paint().apply { color = panel; isAntiAlias = true })
-            canvas.drawLine(0f, panelTop, w.toFloat(), panelTop, Paint().apply { color = dirColor; strokeWidth = 4f })
+            // ---- Footer info panel: patterns, indicators, micro-signals ----
+            val panelTop = (headerH + srcH).toFloat()
+            canvas.drawRect(RectF(0f, panelTop, outW.toFloat(), outH.toFloat()), Paint().apply { color = panel; isAntiAlias = true })
+            canvas.drawLine(0f, panelTop, outW.toFloat(), panelTop, Paint().apply { color = dirColor; strokeWidth = 4f })
 
+            val sectionSize = (outW * 0.021f).coerceIn(18f, 26f)
+            val bodySize = (outW * 0.022f).coerceIn(19f, 27f)
             var cursorY = panelTop + 50f
             val sectionTitlePaint = Paint().apply {
-                color = silverDim; textSize = 26f; isAntiAlias = true
+                color = silverDim; textSize = sectionSize; isAntiAlias = true
                 typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
                 letterSpacing = 0.06f
             }
-            val bodyTextPaint = Paint().apply { color = silver; textSize = 27f; isAntiAlias = true }
-            val bulletGreenPaint = Paint().apply { color = green; textSize = 27f; isAntiAlias = true }
-            val bulletRedPaint = Paint().apply { color = red; textSize = 27f; isAntiAlias = true }
+            val bodyTextPaint = Paint().apply { color = silver; textSize = bodySize; isAntiAlias = true }
+            val bulletGreenPaint = Paint().apply { color = green; textSize = bodySize; isAntiAlias = true }
+            val bulletRedPaint = Paint().apply { color = red; textSize = bodySize; isAntiAlias = true }
+            val lineStep = bodySize + 14f
 
-            canvas.drawText("PATTERNS DETECTED", 36f, cursorY, sectionTitlePaint)
-            cursorY += 42f
+            canvas.drawText("PATTERNS DETECTED", outW * 0.03f, cursorY, sectionTitlePaint)
+            cursorY += lineStep + 6f
             if (result.detectedPatterns.isEmpty()) {
-                canvas.drawText("No named pattern matched — reading from trend/indicators only", 36f, cursorY, bodyTextPaint)
-                cursorY += 40f
+                canvas.drawText("No named pattern matched — reading from trend/indicators only", outW * 0.03f, cursorY, bodyTextPaint)
+                cursorY += lineStep
             } else {
-                result.detectedPatterns.take(4).forEach { p ->
+                result.detectedPatterns.take(3).forEach { p ->
                     val paint = when (p.nextCandleBias) {
                         Direction.DOWN -> bulletRedPaint
                         Direction.UP -> bulletGreenPaint
                         Direction.NEUTRAL -> bodyTextPaint
                     }
-                    canvas.drawText("• ${p.nameEn} (${p.nextCandleBias.name.lowercase()} bias)", 36f, cursorY, paint)
-                    cursorY += 40f
+                    canvas.drawText("• ${p.nameEn} (${p.nextCandleBias.name.lowercase()} bias)", outW * 0.03f, cursorY, paint)
+                    cursorY += lineStep
                 }
             }
 
-            cursorY += 12f
-            canvas.drawText("INDICATORS", 36f, cursorY, sectionTitlePaint)
-            cursorY += 42f
-            result.indicators.take(5).forEach { ind ->
+            cursorY += 14f
+            canvas.drawText("INDICATORS", outW * 0.03f, cursorY, sectionTitlePaint)
+            cursorY += lineStep + 6f
+            result.indicators.take(4).forEach { ind ->
                 val paint = when (ind.bias) {
                     Direction.DOWN -> bulletRedPaint
                     Direction.UP -> bulletGreenPaint
                     Direction.NEUTRAL -> bodyTextPaint
                 }
-                canvas.drawText("• ${ind.nameEn}: ${ind.valueLabel}", 36f, cursorY, paint)
-                cursorY += 40f
+                canvas.drawText("• ${ind.nameEn}: ${ind.valueLabel}", outW * 0.03f, cursorY, paint)
+                cursorY += lineStep
             }
 
-            if (result.microPatterns.isNotEmpty()) {
-                cursorY += 12f
-                canvas.drawText("MICRO-SIGNALS", 36f, cursorY, sectionTitlePaint)
-                cursorY += 42f
-                result.microPatterns.take(3).forEach { m ->
-                    canvas.drawText("• $m", 36f, cursorY, bodyTextPaint)
-                    cursorY += 40f
+            if (result.microPatterns.isNotEmpty() && cursorY < outH - 60f) {
+                cursorY += 14f
+                canvas.drawText("MICRO-SIGNALS", outW * 0.03f, cursorY, sectionTitlePaint)
+                cursorY += lineStep + 6f
+                result.microPatterns.take(2).forEach { m ->
+                    if (cursorY < outH - 40f) {
+                        canvas.drawText("• $m", outW * 0.03f, cursorY, bodyTextPaint)
+                        cursorY += lineStep
+                    }
                 }
             }
 
             canvas.drawText(
                 "Educational pattern observation — not a guaranteed outcome. Manage your own risk.",
-                36f, h - 24f,
-                Paint().apply { color = Color.parseColor("#4D7C8B8F"); textSize = 20f; isAntiAlias = true }
+                outW * 0.03f, outH - 20f,
+                Paint().apply { color = Color.parseColor("#4D7C8B8F"); textSize = (outW * 0.016f).coerceIn(14f, 20f); isAntiAlias = true }
             )
 
             val dir = File(context.getExternalFilesDir("Download"), "").apply { mkdirs() }
@@ -307,7 +244,7 @@ object AnnotatedChartExporter {
     }
 }
 
-/** Lightweight candle-geometry snapshot passed from the analyzer to the exporter for redrawing. */
+/** Lightweight candle-geometry snapshot (kept for compatibility with other analyzer output, no longer used for redrawing). */
 data class ExportCandle(
     val top: Int,
     val bottom: Int,

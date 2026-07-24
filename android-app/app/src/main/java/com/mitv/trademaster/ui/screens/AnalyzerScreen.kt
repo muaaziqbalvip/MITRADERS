@@ -328,11 +328,12 @@ fun AnalyzerScreen(language: String = "en") {
                 language = language,
                 isExporting = isExporting,
                 exportedUri = exportedUri,
-                onDownload = {
+                onDownload = onDownload@{
                     tapFeedback()
+                    val bmp = analyzedBitmap ?: return@onDownload
                     isExporting = true
                     scope.launch {
-                        val uri = withContext(Dispatchers.IO) { AnnotatedChartExporter.export(context, r.exportCandles, r) }
+                        val uri = withContext(Dispatchers.IO) { AnnotatedChartExporter.export(context, bmp, r) }
                         exportedUri = uri
                         isExporting = false
                         if (uri != null) {
