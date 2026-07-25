@@ -175,7 +175,7 @@ object ChartAnalyzer {
         val pattern = detectPattern(candles)
         val srNote = supportResistanceNote(candles, bitmap.height)
         val volatility = recentVolatility(candles)
-        val detectedPatterns = detectNamedPatterns(candles)
+        val detectedPatterns = detectNamedPatterns(candles, direction)
         val microPatterns = detectMicroPatterns(candles)
         val indicators = computeIndicators(candles, direction, strength, volatility, srNote)
         val (nextDir, nextConfidence) = predictNextCandle(direction, strength, detectedPatterns, srNote, indicators, candleIntervalMinutes, tradeDurationMinutes, volatility)
@@ -439,13 +439,15 @@ object ChartAnalyzer {
      * them all into one final weighted call instead of just picking the
      * first match.
      */
-    private fun detectNamedPatterns(candles: List<Candle>): List<CandlePattern> {
+    private fun detectNamedPatterns(candles: List<Candle>, priorTrend: Direction): List<CandlePattern> {
         if (candles.size < 2) return emptyList()
         val patterns = mutableListOf<CandlePattern>()
 
         val c1 = candles.last() // most recent
         val c2 = candles[candles.size - 2]
         val c3 = candles.getOrNull(candles.size - 3)
+        val c4 = candles.getOrNull(candles.size - 4)
+        val c5 = candles.getOrNull(candles.size - 5)
 
         val avgRange = candles.takeLast(min(candles.size, 12)).map { it.range }.average().coerceAtLeast(1.0)
         val bodyRatio1 = c1.bodySize.toDouble() / c1.range
@@ -463,26 +465,58 @@ object ChartAnalyzer {
             ))
         }
 
-        // Hammer: small body near the top, long lower wick — bullish reversal signal at the bottom of a move.
-        if (bodyRatio1 in 0.08..0.35 && c1.lowerWick > c1.bodySize * 2 && c1.upperWick < c1.bodySize) {
+        // Spinning Top: small body with wicks on BOTH sides of similar length — indecision, but less extreme than a Doji.
+        if (bodyRatio1 in 0.12..0.35 && c1.upperWick > c1.bodySize * 0.7 && c1.lowerWick > c1.bodySize * 0.7 &&
+            kotlin.math.abs(c1.upperWick - c1.lowerWick) < c1.range * 0.25) {
             patterns.add(CandlePattern(
-                nameEn = "Hammer", nameUr = "ہیمر",
-                descriptionEn = "Small body with a long lower wick — buyers stepped in and pushed price back up after a dip. A classic bullish-reversal shape.",
-                descriptionUr = "چھوٹا باڈی لمبی نیچے کی وِک کے ساتھ — خریداروں نے قیمت کو نیچے سے واپس اوپر دھکیل دیا۔ یہ ایک کلاسک تیزی کے ریورسل کی شکل ہے۔",
-                nextCandleBias = Direction.UP,
-                reliability = 0.6,
+                nameEn = "Spinning Top", nameUr = "سپننگ ٹاپ",
+                descriptionEn = "Small body with wicks of similar length on both sides — neither buyers nor sellers won this candle, a sign of balance before the next move.",
+                descriptionUr = "دونوں اطراف تقریباً برابر لمبائی کی وِکس کے ساتھ چھوٹا باڈی — نہ خریدار جیتے نہ بیچنے والے، اگلی حرکت سے پہلے توازن کی علامت۔",
+                nextCandleBias = Direction.NEUTRAL,
+                reliability = 0.4,
             ))
         }
 
-        // Shooting Star: small body near the bottom, long upper wick — bearish reversal at the top of a move.
+        // Hammer / Hanging Man: same shape (small body near top, long lower wick) — the SIGN differs entirely on prior trend context.
+        if (bodyRatio1 in 0.08..0.35 && c1.lowerWick > c1.bodySize * 2 && c1.upperWick < c1.bodySize) {
+            if (priorTrend != Direction.UP) {
+                patterns.add(CandlePattern(
+                    nameEn = "Hammer", nameUr = "ہیمر",
+                    descriptionEn = "Small body with a long lower wick after a decline — buyers stepped in and pushed price back up. A classic bullish-reversal shape.",
+                    descriptionUr = "کمی کے بعد چھوٹا باڈی لمبی نیچے کی وِک کے ساتھ — خریداروں نے قیمت کو نیچے سے واپس اوپر دھکیل دیا۔ یہ ایک کلاسک تیزی کے ریورسل کی شکل ہے۔",
+                    nextCandleBias = Direction.UP,
+                    reliability = 0.6,
+                ))
+            } else {
+                patterns.add(CandlePattern(
+                    nameEn = "Hanging Man", nameUr = "ہینگنگ مین",
+                    descriptionEn = "Same shape as a Hammer but appearing AFTER an uptrend — a warning that selling pressure tested the lows and could return.",
+                    descriptionUr = "ہیمر جیسی شکل مگر تیزی کے رجحان کے بعد ظاہر ہوتی ہے — ایک انتباہ کہ فروخت کے دباؤ نے نچلی سطح کو ٹیسٹ کیا اور واپس آ سکتا ہے۔",
+                    nextCandleBias = Direction.DOWN,
+                    reliability = 0.5,
+                ))
+            }
+        }
+
+        // Shooting Star / Inverted Hammer: same shape (small body near bottom, long upper wick) — sign differs on prior trend.
         if (bodyRatio1 in 0.08..0.35 && c1.upperWick > c1.bodySize * 2 && c1.lowerWick < c1.bodySize) {
-            patterns.add(CandlePattern(
-                nameEn = "Shooting Star", nameUr = "شوٹنگ سٹار",
-                descriptionEn = "Small body with a long upper wick — sellers rejected the higher price and pushed it back down. A classic bearish-reversal shape.",
-                descriptionUr = "چھوٹا باڈی لمبی اوپر کی وِک کے ساتھ — بیچنے والوں نے اونچی قیمت کو مسترد کر کے واپس نیچے دھکیل دیا۔ یہ ایک کلاسک مندی کے ریورسل کی شکل ہے۔",
-                nextCandleBias = Direction.DOWN,
-                reliability = 0.6,
-            ))
+            if (priorTrend == Direction.UP) {
+                patterns.add(CandlePattern(
+                    nameEn = "Shooting Star", nameUr = "شوٹنگ سٹار",
+                    descriptionEn = "Small body with a long upper wick after a rally — sellers rejected the higher price and pushed it back down. A classic bearish-reversal shape.",
+                    descriptionUr = "ریلی کے بعد چھوٹا باڈی لمبی اوپر کی وِک کے ساتھ — بیچنے والوں نے اونچی قیمت کو مسترد کر کے واپس نیچے دھکیل دیا۔ یہ ایک کلاسک مندی کے ریورسل کی شکل ہے۔",
+                    nextCandleBias = Direction.DOWN,
+                    reliability = 0.6,
+                ))
+            } else {
+                patterns.add(CandlePattern(
+                    nameEn = "Inverted Hammer", nameUr = "اُلٹا ہیمر",
+                    descriptionEn = "Same shape as a Shooting Star but appearing AFTER a decline — an early sign buyers are starting to test higher prices.",
+                    descriptionUr = "شوٹنگ سٹار جیسی شکل مگر کمی کے بعد ظاہر ہوتی ہے — ایک ابتدائی علامت کہ خریدار زیادہ قیمتوں کو ٹیسٹ کرنا شروع کر رہے ہیں۔",
+                    nextCandleBias = Direction.UP,
+                    reliability = 0.5,
+                ))
+            }
         }
 
         // Marubozu-style: very large body filling almost the whole range — strong conviction, continuation likely.
@@ -498,6 +532,27 @@ object ChartAnalyzer {
             ))
         }
 
+        // Belt Hold: opens at (or very near) the extreme of the candle and closes strongly in the opposite direction — no opening wick at all, immediate conviction.
+        if (bodyRatio1 > 0.75) {
+            if (c1.isBullish && c1.lowerWick < c1.range * 0.05) {
+                patterns.add(CandlePattern(
+                    nameEn = "Bullish Belt Hold", nameUr = "تیزی کا بیلٹ ہولڈ",
+                    descriptionEn = "Opens right at the low with almost no lower wick and closes strongly higher — buyers took control from the very first tick.",
+                    descriptionUr = "نچلی سطح پر کھلتی ہے تقریباً بغیر نیچے کی وِک کے اور مضبوطی سے اوپر بند ہوتی ہے — خریداروں نے پہلی ہی ٹِک سے کنٹرول سنبھال لیا۔",
+                    nextCandleBias = Direction.UP,
+                    reliability = 0.48,
+                ))
+            } else if (!c1.isBullish && c1.upperWick < c1.range * 0.05) {
+                patterns.add(CandlePattern(
+                    nameEn = "Bearish Belt Hold", nameUr = "مندی کا بیلٹ ہولڈ",
+                    descriptionEn = "Opens right at the high with almost no upper wick and closes strongly lower — sellers took control from the very first tick.",
+                    descriptionUr = "اونچی سطح پر کھلتی ہے تقریباً بغیر اوپر کی وِک کے اور مضبوطی سے نیچے بند ہوتی ہے — بیچنے والوں نے پہلی ہی ٹِک سے کنٹرول سنبھال لیا۔",
+                    nextCandleBias = Direction.DOWN,
+                    reliability = 0.48,
+                ))
+            }
+        }
+
         // ---- Two-candle patterns ----
 
         // Bullish/Bearish Engulfing: current body fully engulfs the previous body, opposite color.
@@ -510,6 +565,40 @@ object ChartAnalyzer {
                 descriptionUr = "تازہ ترین کینڈل کا باڈی پچھلی کینڈل کو مخالف رنگ میں مکمل طور پر نگل جاتا ہے — یہ اس نئی سمت میں ایک مضبوط ریورسل سگنل ہے۔",
                 nextCandleBias = dir,
                 reliability = 0.68,
+            ))
+        }
+
+        // Harami: current body sits ENTIRELY INSIDE the previous (much larger) body, opposite color — the mirror-opposite shape of Engulfing.
+        if (c1.isBullish != c2.isBullish && c1.bodySize < c2.bodySize * 0.6 &&
+            c1.bodyTop >= c2.bodyTop.coerceAtMost(c2.bodyBottom) && c1.bodyBottom <= c2.bodyTop.coerceAtLeast(c2.bodyBottom)) {
+            val dir = if (c1.isBullish) Direction.UP else Direction.DOWN
+            patterns.add(CandlePattern(
+                nameEn = if (c1.isBullish) "Bullish Harami" else "Bearish Harami",
+                nameUr = if (c1.isBullish) "تیزی کا ہرامی" else "مندی کا ہرامی",
+                descriptionEn = "A small opposite-colored body sits entirely inside the previous large candle — momentum is stalling and a reversal may be forming.",
+                descriptionUr = "ایک چھوٹا مخالف رنگ کا باڈی پچھلی بڑی کینڈل کے اندر مکمل طور پر بیٹھا ہے — رفتار رک رہی ہے اور ریورسل بن سکتا ہے۔",
+                nextCandleBias = dir,
+                reliability = 0.5,
+            ))
+        }
+
+        // Tweezer Top / Bottom: two consecutive candles with matching highs (top) or matching lows (bottom) — a rejection level confirmed twice in a row.
+        if (kotlin.math.abs(c1.top - c2.top) < avgRange * 0.06 && c1.isBullish != c2.isBullish) {
+            patterns.add(CandlePattern(
+                nameEn = "Tweezer Top", nameUr = "ٹویزر ٹاپ",
+                descriptionEn = "Two consecutive candles topping out at almost the exact same high — that level rejected price twice in a row, a solid resistance signal.",
+                descriptionUr = "دو لگاتار کینڈلز تقریباً بالکل ایک ہی اونچائی پر ختم ہوئیں — اس سطح نے دو بار قیمت کو مسترد کیا، ایک مضبوط ریزسٹنس سگنل۔",
+                nextCandleBias = Direction.DOWN,
+                reliability = 0.5,
+            ))
+        }
+        if (kotlin.math.abs(c1.bottom - c2.bottom) < avgRange * 0.06 && c1.isBullish != c2.isBullish) {
+            patterns.add(CandlePattern(
+                nameEn = "Tweezer Bottom", nameUr = "ٹویزر باٹم",
+                descriptionEn = "Two consecutive candles bottoming out at almost the exact same low — that level held price twice in a row, a solid support signal.",
+                descriptionUr = "دو لگاتار کینڈلز تقریباً بالکل ایک ہی نچلی سطح پر ختم ہوئیں — اس سطح نے دو بار قیمت کو تھاما، ایک مضبوط سپورٹ سگنل۔",
+                nextCandleBias = Direction.UP,
+                reliability = 0.5,
             ))
         }
 
@@ -581,6 +670,61 @@ object ChartAnalyzer {
                     reliability = 0.58,
                 ))
             }
+
+            // Three Inside Up / Down: Harami followed by a strong confirmation candle — a stricter, higher-confidence version of Harami.
+            val haramiUp = !c3.isBullish && c2.isBullish && c2.bodySize < c3.bodySize * 0.6 &&
+                c2.bodyTop <= c3.bodyTop.coerceAtLeast(c3.bodyBottom) && c2.bodyBottom >= c3.bodyTop.coerceAtMost(c3.bodyBottom)
+            if (haramiUp && c1.isBullish && c1.bodyBottom >= c2.bodyBottom) {
+                patterns.add(CandlePattern(
+                    nameEn = "Three Inside Up", nameUr = "تھری اِنسائیڈ اپ",
+                    descriptionEn = "A bearish candle, then a small body inside it, then a strong up candle confirming the reversal — a higher-confidence Harami follow-through.",
+                    descriptionUr = "ایک مندی کی کینڈل، پھر اس کے اندر ایک چھوٹا باڈی، پھر ایک مضبوط اوپر کی کینڈل جو ریورسل کی تصدیق کرتی ہے — ہرامی کی زیادہ قابلِ اعتماد تصدیق۔",
+                    nextCandleBias = Direction.UP,
+                    reliability = 0.63,
+                ))
+            }
+            val haramiDown = c3.isBullish && !c2.isBullish && c2.bodySize < c3.bodySize * 0.6 &&
+                c2.bodyTop <= c3.bodyTop.coerceAtLeast(c3.bodyBottom) && c2.bodyBottom >= c3.bodyTop.coerceAtMost(c3.bodyBottom)
+            if (haramiDown && !c1.isBullish && c1.bodyTop <= c2.bodyTop) {
+                patterns.add(CandlePattern(
+                    nameEn = "Three Inside Down", nameUr = "تھری اِنسائیڈ ڈاؤن",
+                    descriptionEn = "A bullish candle, then a small body inside it, then a strong down candle confirming the reversal — a higher-confidence Harami follow-through.",
+                    descriptionUr = "ایک تیزی کی کینڈل، پھر اس کے اندر ایک چھوٹا باڈی، پھر ایک مضبوط نیچے کی کینڈل جو ریورسل کی تصدیق کرتی ہے — ہرامی کی زیادہ قابلِ اعتماد تصدیق۔",
+                    nextCandleBias = Direction.DOWN,
+                    reliability = 0.63,
+                ))
+            }
+        }
+
+        // ---- Five-candle patterns ----
+        if (c4 != null && c5 != null) {
+            // Rising Three Methods: strong up candle, 3 small pullback candles staying inside its range, then another strong up candle — trend continuation.
+            val bigUp1 = c5.isBullish && c5.bodySize.toDouble() / c5.range > 0.55
+            val smallPullbacks = listOf(c4, c3, c2).all { it.bodySize.toDouble() / it.range < 0.5 && it.top >= c5.bodyTop && it.bottom <= c5.bodyBottom + (c5.range * 0.15).toInt() }
+            val bigUp2 = c1.isBullish && c1.bodySize.toDouble() / c1.range > 0.5 && c1.bodyBottom < c5.bodyTop
+            if (bigUp1 && smallPullbacks && bigUp2) {
+                patterns.add(CandlePattern(
+                    nameEn = "Rising Three Methods", nameUr = "رائزنگ تھری میتھڈز",
+                    descriptionEn = "A strong up candle, a short pause of small pullback candles, then another strong up candle — the uptrend catching its breath before continuing.",
+                    descriptionUr = "ایک مضبوط اوپر کی کینڈل، چھوٹی پل بیک کینڈلز کا مختصر وقفہ، پھر ایک اور مضبوط اوپر کی کینڈل — تیزی کا رجحان سانس لے کر جاری رہنا۔",
+                    nextCandleBias = Direction.UP,
+                    reliability = 0.55,
+                ))
+            }
+
+            // Falling Three Methods: mirror of the above, downtrend continuation.
+            val bigDown1 = !c5.isBullish && c5.bodySize.toDouble() / c5.range > 0.55
+            val smallPullbacksDown = listOf(c4, c3, c2).all { it.bodySize.toDouble() / it.range < 0.5 && it.bottom <= c5.bodyBottom && it.top >= c5.bodyTop - (c5.range * 0.15).toInt() }
+            val bigDown2 = !c1.isBullish && c1.bodySize.toDouble() / c1.range > 0.5 && c1.bodyTop > c5.bodyBottom
+            if (bigDown1 && smallPullbacksDown && bigDown2) {
+                patterns.add(CandlePattern(
+                    nameEn = "Falling Three Methods", nameUr = "فالنگ تھری میتھڈز",
+                    descriptionEn = "A strong down candle, a short pause of small pullback candles, then another strong down candle — the downtrend catching its breath before continuing.",
+                    descriptionUr = "ایک مضبوط نیچے کی کینڈل، چھوٹی پل بیک کینڈلز کا مختصر وقفہ، پھر ایک اور مضبوط نیچے کی کینڈل — مندی کا رجحان سانس لے کر جاری رہنا۔",
+                    nextCandleBias = Direction.DOWN,
+                    reliability = 0.55,
+                ))
+            }
         }
 
         return patterns
@@ -639,6 +783,30 @@ object ChartAnalyzer {
 
         val total = (upScore + downScore).coerceAtLeast(0.01)
         var upPct = (upScore / total * 100).coerceIn(0.0, 100.0)
+
+        // ---- Confluence bonus ----
+        // A real multi-factor signal system doesn't just average its inputs —
+        // it rewards AGREEMENT between independent factors. If the trend,
+        // most named patterns, AND most indicators are all pointing the
+        // same way, that's a materially stronger case than the same average
+        // score reached by one loud factor and several neutral ones. This
+        // is what separates "best quality" scoring from a flat weighted sum.
+        val patternDirs = patterns.map { it.nextCandleBias }.filter { it != Direction.NEUTRAL }
+        val indicatorDirs = indicators.map { it.bias }.filter { it != Direction.NEUTRAL }
+        val allVotes = patternDirs + indicatorDirs + listOf(trendDirection).filter { it != Direction.NEUTRAL }
+        if (allVotes.isNotEmpty()) {
+            val upVotes = allVotes.count { it == Direction.UP }
+            val downVotes = allVotes.count { it == Direction.DOWN }
+            val agreementRatio = max(upVotes, downVotes).toDouble() / allVotes.size
+            // Only reward CLEAR agreement (75%+ of all factors pointing one
+            // way) so a narrow majority doesn't get treated as confluence.
+            if (agreementRatio >= 0.75 && allVotes.size >= 3) {
+                val confluenceBoost = (agreementRatio - 0.75) * 40.0 // up to +10 at 100% agreement
+                val edge = upPct - 50.0
+                val boostedEdge = if (edge >= 0) edge + confluenceBoost else edge - confluenceBoost
+                upPct = (50.0 + boostedEdge).coerceIn(0.0, 100.0)
+            }
+        }
 
         // ---- Time-window adjustment ----
         // This is the piece that was missing: the circle/exported-image
