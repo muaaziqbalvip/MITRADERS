@@ -12,8 +12,8 @@ android {
         applicationId = "com.mitv.trademaster"
         minSdk = 26
         targetSdk = 34
-        versionCode = 15
-        versionName = "15.0.0"
+        versionCode = 14
+        versionName = "14.0.0"
 
         // Groq API key is NOT stored in the app — it's fetched at runtime from
         // Firestore (config/groq document), settable/rotatable from the admin

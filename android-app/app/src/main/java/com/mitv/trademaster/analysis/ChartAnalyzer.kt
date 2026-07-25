@@ -724,6 +724,10 @@ object ChartAnalyzer {
                 c2.bodyTop <= c3.bodyTop.coerceAtLeast(c3.bodyBottom) && c2.bodyBottom >= c3.bodyTop.coerceAtMost(c3.bodyBottom)
             if (haramiDown && !c1.isBullish && c1.bodyTop <= c2.bodyTop) {
                 patterns.add(CandlePattern(
+                    nameEn = "Three Inside Down", nameUr = "تھری اِنسائیڈ ڈاؤن",
+                    descriptionEn = "A bullish candle, then a small body inside it, then a strong down candle confirming the reversal — a higher-confidence Harami follow-through.",
+                    descriptionUr = "ایک تیزی کی کینڈل، پھر اس کے اندر ایک چھوٹا باڈی، پھر ایک مضبوط نیچے کی کینڈل جو ریورسل کی تصدیق کرتی ہے — ہرامی کی زیادہ قابلِ اعتماد تصدیق۔",
+                    nextCandleBias = Direction.DOWN,
                     reliability = 0.63,
                 ))
             }
