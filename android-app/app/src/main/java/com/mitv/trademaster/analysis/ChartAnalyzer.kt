@@ -171,20 +171,31 @@ object ChartAnalyzer {
             )
         }
 
-        val (direction, strength) = trendFromCandles(candles)
+        val (trendDirection, strength) = trendFromCandles(candles)
         val pattern = detectPattern(candles)
         val srNote = supportResistanceNote(candles, bitmap.height)
         val volatility = recentVolatility(candles)
-        val detectedPatterns = detectNamedPatterns(candles, direction)
+        val detectedPatterns = detectNamedPatterns(candles, trendDirection)
         val microPatterns = detectMicroPatterns(candles)
-        val indicators = computeIndicators(candles, direction, strength, volatility, srNote)
-        val (nextDir, nextConfidence) = predictNextCandle(direction, strength, detectedPatterns, srNote, indicators, candleIntervalMinutes, tradeDurationMinutes, volatility)
+        val indicators = computeIndicators(candles, trendDirection, strength, volatility, srNote)
+        val (nextDir, nextConfidence) = predictNextCandle(trendDirection, strength, detectedPatterns, srNote, indicators, candleIntervalMinutes, tradeDurationMinutes, volatility)
+
+        // The overall call the user sees (explanation, lean statement, trade
+        // suggestion, strategy matches) should agree with the confluence
+        // read (trend + named patterns + indicators combined), not just the
+        // raw candle-slope. Previously `direction` was slope-only, so a
+        // chart could have several patterns and indicators clearly leaning
+        // one way and still show "Neutral" everywhere just because the
+        // linear-regression slope sat inside a small dead zone. Only fall
+        // back to the plain trend read when confluence itself is neutral.
+        val direction = if (nextDir != Direction.NEUTRAL) nextDir else trendDirection
 
         var confidence = when {
             strength > 0.6 -> Confidence.HIGH
             strength > 0.3 -> Confidence.MEDIUM
             else -> Confidence.LOW
         }
+        if (nextConfidence >= 65 && confidence == Confidence.LOW) confidence = Confidence.MEDIUM
         if (srNote.contains("support") && direction != Direction.DOWN && confidence == Confidence.LOW) {
             confidence = Confidence.MEDIUM
         }
@@ -193,10 +204,10 @@ object ChartAnalyzer {
         }
 
         val explanation = "Detected ${candles.size} candles in view. Recent price structure shows a " +
-            "${direction.name.lowercase()} lean based on candle midpoint slope. Latest candle pattern: $pattern. $srNote."
+            "${direction.name.lowercase()} lean based on combined trend, pattern, and indicator signals. Latest candle pattern: $pattern. $srNote."
 
         val signals = buildList {
-            add(when (direction) {
+            add(when (trendDirection) {
                 Direction.UP -> "Trend slope: upward"
                 Direction.DOWN -> "Trend slope: downward"
                 Direction.NEUTRAL -> "Trend slope: flat / sideways"
@@ -222,7 +233,7 @@ object ChartAnalyzer {
         }
 
         val tradeSuggestion = if (candleIntervalMinutes != null && tradeDurationMinutes != null && candleIntervalMinutes > 0 && tradeDurationMinutes > 0) {
-            buildTradeSuggestion(direction, strength, volatility, srNote, candleIntervalMinutes, tradeDurationMinutes)
+            buildTradeSuggestion(direction, strength, volatility, srNote, candleIntervalMinutes, tradeDurationMinutes, nextDir, nextConfidence)
         } else null
 
         val matchedStrategies = detectStrategies(candles, direction, strength, srNote, volatility)
@@ -370,43 +381,51 @@ object ChartAnalyzer {
         srNote: String,
         candleIntervalMinutes: Int,
         tradeDurationMinutes: Int,
+        confluenceDirection: Direction,
+        confluenceConfidence: Int,
     ): TradeSuggestion {
         val candlesInWindow = (tradeDurationMinutes.toDouble() / candleIntervalMinutes).coerceAtLeast(0.5)
 
-        // Base confidence from trend strength, 0-100 scale.
-        var confidencePercent = (strength * 100).coerceIn(0.0, 100.0)
+        // Start from the confluence-based read (trend + named patterns +
+        // indicators combined, computed once in predictNextCandle) rather
+        // than a fresh trend-strength-only score. Previously this function
+        // built its own confidence from `strength` alone, discounted it
+        // 2-3 times over (window size, choppiness, short-interval noise),
+        // and forced the result to NEUTRAL below 35% — which meant a chart
+        // where every pattern and indicator clearly agreed on a direction
+        // could still get flattened to "Neutral" here purely because raw
+        // trend slope was moderate. Anchoring on the same confluence score
+        // the rest of the analyzer already trusts fixes that disconnect.
+        var confidencePercent = confluenceConfidence.toDouble()
 
         // Discount for how many candles the trade window spans — a
         // suggestion for "the next 1 candle" is inherently more grounded
-        // in what we just measured than "the next 10 candles".
+        // in what we just measured than "the next 10 candles". Kept
+        // gentler than before since we're no longer stacking this on top
+        // of an already-conservative base score.
         val windowDiscount = when {
             candlesInWindow <= 1.5 -> 1.0
-            candlesInWindow <= 3.0 -> 0.85
-            candlesInWindow <= 6.0 -> 0.7
-            else -> 0.55
+            candlesInWindow <= 3.0 -> 0.92
+            candlesInWindow <= 6.0 -> 0.82
+            else -> 0.7
         }
         confidencePercent *= windowDiscount
 
-        // Discount for choppiness: high volatility relative to trend
-        // strength means the recent move is less "clean".
-        val choppinessDiscount = if (volatility > 0.5 && strength < 0.5) 0.8 else 1.0
+        // Choppiness still trims confidence a little, but only when it's
+        // genuinely conflicting with a weak trend — not as a blanket cut.
+        val choppinessDiscount = if (volatility > 0.6 && strength < 0.4) 0.88 else 1.0
         confidencePercent *= choppinessDiscount
-
-        // Very short candle intervals are noisier in general.
-        val intervalDiscount = when {
-            candleIntervalMinutes <= 1 -> 0.85
-            candleIntervalMinutes <= 2 -> 0.92
-            else -> 1.0
-        }
-        confidencePercent *= intervalDiscount
 
         // Support/resistance proximity nudges confidence in the direction
         // it favors, same logic as the base analyzer.
-        if (srNote.contains("support") && direction == Direction.UP) confidencePercent = (confidencePercent + 8).coerceAtMost(95.0)
-        if (srNote.contains("resistance") && direction == Direction.DOWN) confidencePercent = (confidencePercent + 8).coerceAtMost(95.0)
+        if (srNote.contains("support") && confluenceDirection == Direction.UP) confidencePercent = (confidencePercent + 6).coerceAtMost(96.0)
+        if (srNote.contains("resistance") && confluenceDirection == Direction.DOWN) confidencePercent = (confidencePercent + 6).coerceAtMost(96.0)
 
-        val finalDirection = if (confidencePercent < 35.0) Direction.NEUTRAL else direction
-        val finalConfidence = confidencePercent.toInt().coerceIn(5, 95)
+        // Only fall back to Neutral when confidence is genuinely low —
+        // lowered from 35 to 28 since the base score here is already the
+        // more reliable confluence read, not a raw discounted trend score.
+        val finalDirection = if (confidencePercent < 28.0) Direction.NEUTRAL else confluenceDirection
+        val finalConfidence = confidencePercent.toInt().coerceIn(5, 96)
 
         val windowLabel = if (candlesInWindow <= 1.05) "the next candle" else "the next ${"%.0f".format(candlesInWindow)} candles"
         val reasoning = when (finalDirection) {
@@ -1408,8 +1427,8 @@ object ChartAnalyzer {
         val normalized = -slope // image y grows downward; negative slope = price rising
 
         return when {
-            normalized > 0.8 -> Direction.UP to min(abs(normalized) / 5.0, 1.0)
-            normalized < -0.8 -> Direction.DOWN to min(abs(normalized) / 5.0, 1.0)
+            normalized > 0.5 -> Direction.UP to min(abs(normalized) / 5.0, 1.0)
+            normalized < -0.5 -> Direction.DOWN to min(abs(normalized) / 5.0, 1.0)
             else -> Direction.NEUTRAL to 0.2
         }
     }

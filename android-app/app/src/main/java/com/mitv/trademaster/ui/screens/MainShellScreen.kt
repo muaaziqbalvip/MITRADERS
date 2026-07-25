@@ -100,9 +100,7 @@ fun MainShellScreen(
             NavigationBar(
                 containerColor = PanelDark,
                 contentColor = BrandSilver,
-                tonalElevation = 0.dp,
-                modifier = Modifier.height(88.dp),
-                windowInsets = WindowInsets(0.dp)
+                tonalElevation = 0.dp
             ) {
                 tabs.forEach { tab ->
                     val isMore = tab == Tab.More
@@ -128,8 +126,8 @@ fun MainShellScreen(
                             icon = {
                                 Box(
                                     modifier = Modifier
-                                        .offset(y = (-10).dp)
-                                        .size(50.dp)
+                                        .offset(y = (-6).dp)
+                                        .size(44.dp)
                                         .background(
                                             brush = androidx.compose.ui.graphics.Brush.radialGradient(
                                                 colors = if (selected)
@@ -150,7 +148,7 @@ fun MainShellScreen(
                                         tab.icon,
                                         contentDescription = null,
                                         tint = Color.Black,
-                                        modifier = Modifier.size(26.dp)
+                                        modifier = Modifier.size(22.dp)
                                     )
                                 }
                             },
@@ -161,7 +159,7 @@ fun MainShellScreen(
                                     fontWeight = FontWeight.Bold,
                                     color = BrandGreen,
                                     maxLines = 1,
-                                    modifier = Modifier.offset(y = (-6).dp)
+                                    modifier = Modifier.offset(y = (-3).dp)
                                 )
                             },
                             colors = NavigationBarItemDefaults.colors(
