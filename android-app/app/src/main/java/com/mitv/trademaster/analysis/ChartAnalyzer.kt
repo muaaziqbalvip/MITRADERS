@@ -625,6 +625,43 @@ object ChartAnalyzer {
             }
         }
 
+        // Kicker: a strong candle immediately reverses into an equally strong opposite-colored
+        // candle that opens beyond the prior body with almost no overlap — one of the most
+        // decisive single-transition reversal signals since it shows sentiment flipping outright.
+        if (c1.isBullish != c2.isBullish && bodyRatio1 > 0.6 && c2.bodySize.toDouble() / c2.range > 0.6) {
+            val gapReversal = if (c1.isBullish) c1.bodyBottom >= c2.bodyTop else c1.bodyTop <= c2.bodyBottom
+            if (gapReversal) {
+                patterns.add(CandlePattern(
+                    nameEn = if (c1.isBullish) "Bullish Kicker" else "Bearish Kicker",
+                    nameUr = if (c1.isBullish) "تیزی کا کِکر" else "مندی کا کِکر",
+                    descriptionEn = "A strong candle is immediately followed by an equally strong candle of the opposite color that opens clear of the first body — sentiment flipped outright, one of the most decisive reversal signals.",
+                    descriptionUr = "ایک مضبوط کینڈل کے فوراً بعد مخالف رنگ کی ایک اتنی ہی مضبوط کینڈل آتی ہے جو پہلی باڈی سے صاف فاصلے پر کھلتی ہے — جذبات مکمل طور پر پلٹ گئے، یہ سب سے فیصلہ کن ریورسل سگنلز میں سے ایک ہے۔",
+                    nextCandleBias = if (c1.isBullish) Direction.UP else Direction.DOWN,
+                    reliability = 0.7,
+                ))
+            }
+        }
+
+        // On-Neck / In-Neck / Thrusting Line: after a down candle, an up candle opens lower
+        // but closes only marginally into (or right at) the prior candle's low — a weak,
+        // often-failing bullish attempt rather than a genuine reversal.
+        if (!c2.isBullish && c1.isBullish && c1.bodyTop < c2.bodyBottom + (c2.range * 0.35).toInt() && c1.bodyBottom <= c2.bodyBottom) {
+            val closeAboveLow = c1.bodyTop - c2.bodyBottom
+            val label = when {
+                abs(closeAboveLow) < c2.range * 0.05 -> "On-Neck Line" to "آن-نیک لائن"
+                closeAboveLow < c2.range * 0.15 -> "In-Neck Line" to "اِن-نیک لائن"
+                else -> "Thrusting Line" to "تھرَسٹنگ لائن"
+            }
+            patterns.add(CandlePattern(
+                nameEn = label.first, nameUr = label.second,
+                descriptionEn = "After a down candle, this up candle barely pushes back into the prior candle's range and stalls near its low — a weak bounce attempt that often fails to reverse the downtrend.",
+                descriptionUr = "نیچے کی کینڈل کے بعد، یہ اوپر کی کینڈل بمشکل پچھلی کینڈل کی رینج میں واپس آتی ہے اور اس کی نچلی سطح کے قریب رک جاتی ہے — ایک کمزور بحالی کی کوشش جو اکثر مندی کے رجحان کو پلٹنے میں ناکام رہتی ہے۔",
+                nextCandleBias = Direction.DOWN,
+                reliability = 0.42,
+            ))
+        }
+
+
         // ---- Three-candle patterns ----
         if (c3 != null) {
             // Morning Star: down, small indecisive middle, strong up — bullish reversal.
@@ -687,12 +724,55 @@ object ChartAnalyzer {
                 c2.bodyTop <= c3.bodyTop.coerceAtLeast(c3.bodyBottom) && c2.bodyBottom >= c3.bodyTop.coerceAtMost(c3.bodyBottom)
             if (haramiDown && !c1.isBullish && c1.bodyTop <= c2.bodyTop) {
                 patterns.add(CandlePattern(
-                    nameEn = "Three Inside Down", nameUr = "تھری اِنسائیڈ ڈاؤن",
-                    descriptionEn = "A bullish candle, then a small body inside it, then a strong down candle confirming the reversal — a higher-confidence Harami follow-through.",
-                    descriptionUr = "ایک تیزی کی کینڈل، پھر اس کے اندر ایک چھوٹا باڈی، پھر ایک مضبوط نیچے کی کینڈل جو ریورسل کی تصدیق کرتی ہے — ہرامی کی زیادہ قابلِ اعتماد تصدیق۔",
-                    nextCandleBias = Direction.DOWN,
                     reliability = 0.63,
                 ))
+            }
+
+            // Tri-Star: three consecutive Doji-like candles with the middle one gapped away
+            // from the other two — extremely rare, but a very strong exhaustion/reversal signal
+            // when it shows up, since it means indecision peaked three candles in a row.
+            val dojiRatio1 = bodyRatio1 < 0.12
+            val dojiRatio2 = c2.bodySize.toDouble() / c2.range < 0.12
+            val dojiRatio3 = c3.bodySize.toDouble() / c3.range < 0.12
+            if (dojiRatio1 && dojiRatio2 && dojiRatio3) {
+                val midAbove = (c2.top + c2.bottom) / 2.0 < min((c1.top + c1.bottom) / 2, (c3.top + c3.bottom) / 2)
+                patterns.add(CandlePattern(
+                    nameEn = if (midAbove) "Bearish Tri-Star" else "Bullish Tri-Star",
+                    nameUr = if (midAbove) "مندی کا ٹرائی سٹار" else "تیزی کا ٹرائی سٹار",
+                    descriptionEn = "Three Doji-like candles in a row, with the middle one gapped away from the other two — a rare but very strong exhaustion signal after indecision peaks three times running.",
+                    descriptionUr = "لگاتار تین دوجی طرز کی کینڈلز، درمیانی کینڈل باقی دونوں سے فاصلے پر — یہ ایک نایاب مگر بہت مضبوط تھکن کا سگنل ہے جب غیر یقینی صورتحال تین بار عروج پر پہنچتی ہے۔",
+                    nextCandleBias = if (midAbove) Direction.DOWN else Direction.UP,
+                    reliability = 0.6,
+                ))
+            }
+
+            // Abandoned Baby: like Morning/Evening Star but the middle Doji is fully gapped
+            // away from BOTH neighbors (no body overlap on either side) — a stricter, rarer,
+            // and historically more reliable version of the Star patterns above.
+            val midIsDoji = c2.bodySize.toDouble() / c2.range < 0.15
+            if (midIsDoji) {
+                val gappedBelowLeft = c2.top > c3.bodyTop.coerceAtLeast(c3.bodyBottom)
+                val gappedBelowRight = c2.top > c1.bodyTop.coerceAtLeast(c1.bodyBottom)
+                if (!c3.isBullish && c1.isBullish && gappedBelowLeft && gappedBelowRight) {
+                    patterns.add(CandlePattern(
+                        nameEn = "Bullish Abandoned Baby", nameUr = "تیزی کا ابانڈنڈ بےبی",
+                        descriptionEn = "A down candle, then a Doji gapped clear below both neighbors, then a strong up candle — a stricter and historically more reliable cousin of the Morning Star.",
+                        descriptionUr = "ایک نیچے کی کینڈل، پھر دونوں اطراف سے صاف فاصلے پر ایک دوجی، پھر ایک مضبوط اوپر کی کینڈل — یہ مارننگ سٹار کا زیادہ سخت اور تاریخی طور پر زیادہ قابلِ اعتماد ورژن ہے۔",
+                        nextCandleBias = Direction.UP,
+                        reliability = 0.75,
+                    ))
+                }
+                val gappedAboveLeft = c2.bottom < c3.bodyTop.coerceAtMost(c3.bodyBottom)
+                val gappedAboveRight = c2.bottom < c1.bodyTop.coerceAtMost(c1.bodyBottom)
+                if (c3.isBullish && !c1.isBullish && gappedAboveLeft && gappedAboveRight) {
+                    patterns.add(CandlePattern(
+                        nameEn = "Bearish Abandoned Baby", nameUr = "مندی کا ابانڈنڈ بےبی",
+                        descriptionEn = "An up candle, then a Doji gapped clear above both neighbors, then a strong down candle — a stricter and historically more reliable cousin of the Evening Star.",
+                        descriptionUr = "ایک اوپر کی کینڈل، پھر دونوں اطراف سے صاف فاصلے پر ایک دوجی، پھر ایک مضبوط نیچے کی کینڈل — یہ ایوننگ سٹار کا زیادہ سخت اور تاریخی طور پر زیادہ قابلِ اعتماد ورژن ہے۔",
+                        nextCandleBias = Direction.DOWN,
+                        reliability = 0.75,
+                    ))
+                }
             }
         }
 
@@ -700,7 +780,7 @@ object ChartAnalyzer {
         if (c4 != null && c5 != null) {
             // Rising Three Methods: strong up candle, 3 small pullback candles staying inside its range, then another strong up candle — trend continuation.
             val bigUp1 = c5.isBullish && c5.bodySize.toDouble() / c5.range > 0.55
-            val smallPullbacks = listOf(c4, c3, c2).all { it.bodySize.toDouble() / it.range < 0.5 && it.top >= c5.bodyTop && it.bottom <= c5.bodyBottom + (c5.range * 0.15).toInt() }
+            val smallPullbacks = listOfNotNull(c4, c3, c2).all { it.bodySize.toDouble() / it.range < 0.5 && it.top >= c5.bodyTop && it.bottom <= c5.bodyBottom + (c5.range * 0.15).toInt() }
             val bigUp2 = c1.isBullish && c1.bodySize.toDouble() / c1.range > 0.5 && c1.bodyBottom < c5.bodyTop
             if (bigUp1 && smallPullbacks && bigUp2) {
                 patterns.add(CandlePattern(
@@ -714,7 +794,7 @@ object ChartAnalyzer {
 
             // Falling Three Methods: mirror of the above, downtrend continuation.
             val bigDown1 = !c5.isBullish && c5.bodySize.toDouble() / c5.range > 0.55
-            val smallPullbacksDown = listOf(c4, c3, c2).all { it.bodySize.toDouble() / it.range < 0.5 && it.bottom <= c5.bodyBottom && it.top >= c5.bodyTop - (c5.range * 0.15).toInt() }
+            val smallPullbacksDown = listOfNotNull(c4, c3, c2).all { it.bodySize.toDouble() / it.range < 0.5 && it.bottom <= c5.bodyBottom && it.top >= c5.bodyTop - (c5.range * 0.15).toInt() }
             val bigDown2 = !c1.isBullish && c1.bodySize.toDouble() / c1.range > 0.5 && c1.bodyTop > c5.bodyBottom
             if (bigDown1 && smallPullbacksDown && bigDown2) {
                 patterns.add(CandlePattern(
@@ -723,6 +803,30 @@ object ChartAnalyzer {
                     descriptionUr = "ایک مضبوط نیچے کی کینڈل، چھوٹی پل بیک کینڈلز کا مختصر وقفہ، پھر ایک اور مضبوط نیچے کی کینڈل — مندی کا رجحان سانس لے کر جاری رہنا۔",
                     nextCandleBias = Direction.DOWN,
                     reliability = 0.55,
+                ))
+            }
+
+            // Ladder Bottom / Top: three strong same-direction candles, then a small-bodied
+            // pause candle, then a strong reversal candle in the opposite direction — a slower,
+            // more deliberate exhaustion-then-flip than Kicker, spread across five candles.
+            val threeDownLadder = listOfNotNull(c5, c4, c3).all { !it.isBullish && it.bodySize.toDouble() / it.range > 0.5 }
+            if (threeDownLadder && c2.bodySize.toDouble() / c2.range < 0.4 && c1.isBullish && c1.bodySize.toDouble() / c1.range > 0.45) {
+                patterns.add(CandlePattern(
+                    nameEn = "Ladder Bottom", nameUr = "لیڈر باٹم",
+                    descriptionEn = "Three strong down candles, then a small pause candle, then a strong up candle — a slower, more deliberate exhaustion-then-reversal at the bottom of a move.",
+                    descriptionUr = "تین مضبوط نیچے کی کینڈلز، پھر ایک چھوٹی توقف کینڈل، پھر ایک مضبوط اوپر کی کینڈل — حرکت کے نچلے حصے میں ایک سست مگر واضح تھکن کے بعد ریورسل۔",
+                    nextCandleBias = Direction.UP,
+                    reliability = 0.56,
+                ))
+            }
+            val threeUpLadder = listOfNotNull(c5, c4, c3).all { it.isBullish && it.bodySize.toDouble() / it.range > 0.5 }
+            if (threeUpLadder && c2.bodySize.toDouble() / c2.range < 0.4 && !c1.isBullish && c1.bodySize.toDouble() / c1.range > 0.45) {
+                patterns.add(CandlePattern(
+                    nameEn = "Ladder Top", nameUr = "لیڈر ٹاپ",
+                    descriptionEn = "Three strong up candles, then a small pause candle, then a strong down candle — a slower, more deliberate exhaustion-then-reversal at the top of a move.",
+                    descriptionUr = "تین مضبوط اوپر کی کینڈلز، پھر ایک چھوٹی توقف کینڈل، پھر ایک مضبوط نیچے کی کینڈل — حرکت کے اوپری حصے میں ایک سست مگر واضح تھکن کے بعد ریورسل۔",
+                    nextCandleBias = Direction.DOWN,
+                    reliability = 0.56,
                 ))
             }
         }
@@ -954,6 +1058,38 @@ object ChartAnalyzer {
             valueLabel = trendLabel, bias = direction, weight = 0.5,
         ))
 
+        // ---- MACD-style momentum shift (fast vs slow midpoint average divergence) ----
+        // Cheap proxy for real MACD: compares a short-window midpoint average against
+        // a longer-window one and reads whether the gap is widening (accelerating
+        // momentum) or narrowing (momentum fading) over the last few candles.
+        if (candles.size >= 10) {
+            val fastWindow = min(candles.size, 5)
+            val slowWindow = min(candles.size, 10)
+            val fastAvg = candles.takeLast(fastWindow).map { (it.top + it.bottom) / 2.0 }.average()
+            val slowAvg = candles.takeLast(slowWindow).map { (it.top + it.bottom) / 2.0 }.average()
+            // Screen y-axis is inverted (smaller value = higher price), so a fast
+            // average below the slow average means price has been rising recently.
+            val gap = slowAvg - fastAvg
+            val prevFastAvg = candles.dropLast(1).takeLast(fastWindow).map { (it.top + it.bottom) / 2.0 }.let { if (it.isEmpty()) fastAvg else it.average() }
+            val prevSlowAvg = candles.dropLast(1).takeLast(slowWindow).map { (it.top + it.bottom) / 2.0 }.let { if (it.isEmpty()) slowAvg else it.average() }
+            val prevGap = prevSlowAvg - prevFastAvg
+            val accelerating = abs(gap) > abs(prevGap) * 1.05
+            val macdBias = when {
+                gap > 1 -> Direction.UP
+                gap < -1 -> Direction.DOWN
+                else -> Direction.NEUTRAL
+            }
+            val macdLabel = when {
+                macdBias == Direction.NEUTRAL -> "Flat — no clear momentum shift"
+                accelerating -> "${if (macdBias == Direction.UP) "Bullish" else "Bearish"} — widening (accelerating)"
+                else -> "${if (macdBias == Direction.UP) "Bullish" else "Bearish"} — narrowing (fading)"
+            }
+            readings.add(IndicatorReading(
+                nameEn = "Momentum Shift (MACD-style)", nameUr = "مومینٹم شفٹ (MACD طرز)",
+                valueLabel = macdLabel, bias = macdBias, weight = if (accelerating) 0.4 else 0.2,
+            ))
+        }
+
         return readings
     }
 
@@ -1008,6 +1144,20 @@ object ChartAnalyzer {
                 notes.add("$label: micro-range candle — very low activity")
             }
 
+            // Wick pressure — even a small wick that's still meaningfully bigger
+            // than the opposite side hints at which way buyers/sellers leaned,
+            // without needing the stricter "pin bar dominance" ratio above.
+            if (c.bodySize > 0 && posFromEnd <= 3) {
+                val wickDiff = c.upperWick - c.lowerWick
+                if (abs(wickDiff) > c.bodySize * 1.2 && abs(wickDiff) <= c.bodySize * 3) {
+                    if (wickDiff > 0) {
+                        notes.add("$label: upper wick pressure — sellers pushed back partway")
+                    } else {
+                        notes.add("$label: lower wick pressure — buyers pushed back partway")
+                    }
+                }
+            }
+
             // Expanding-range breakout candle — noticeably bigger than the recent average, signals a possible momentum burst.
             if (c.range > avgRange * 1.8 && posFromEnd <= 2) {
                 notes.add("$label: expanding-range candle — noticeably larger than recent average, possible momentum burst")
@@ -1047,10 +1197,16 @@ object ChartAnalyzer {
     private fun segmentCandles(bitmap: Bitmap): List<Candle> {
         val w = bitmap.width
         val h = bitmap.height
-        val candles = mutableListOf<Candle>()
+        val rawColumns = mutableListOf<RawColumn>()
 
-        // Sample every few columns for performance on large screenshots
-        val step = max(1, w / 400)
+        // Sample every column up to a sane cap for performance — finer than before
+        // (previously every ~w/400 columns), so thin single-candle wicks on
+        // small/short-timeframe charts are far less likely to fall between samples.
+        val step = max(1, w / 700)
+        // Vertical stride: scan every row on normal-height screenshots (was every
+        // 2px before, missing 1px wick tips); only widen the stride on unusually
+        // tall images so total scan cost stays bounded.
+        val yStep = if (h > 2200) 2 else 1
 
         var x = 0
         while (x < w) {
@@ -1058,15 +1214,10 @@ object ChartAnalyzer {
             var bottom = -1
             var greenCount = 0
             var redCount = 0
-            // Track per-row color density along this column: the BODY of a
-            // candle is where the colored column is at its widest/densest
-            // (the wick is a thin 1-pixel-wide line, the body is a filled
-            // block many pixels wide). We approximate this by re-scanning a
-            // small neighborhood around x for each colored row and counting
-            // how many of those neighboring columns are also colored at that
-            // same y — a thin wick will have low neighbor-density, a thick
-            // body will have high neighbor-density.
-            val coloredRows = mutableListOf<Int>()
+            // Row-by-row colored/not-colored map for this column, used below to
+            // find the real body vs wick boundary by density rather than a flat
+            // percentage guess.
+            val rowColored = BooleanArray(h)
 
             var y = 0
             while (y < h) {
@@ -1081,34 +1232,106 @@ object ChartAnalyzer {
                 if (isGreen || isRed) {
                     if (top == -1) top = y
                     bottom = y
-                    coloredRows.add(y)
+                    rowColored[y] = true
                     if (isGreen) greenCount++ else redCount++
                 }
-                y += 2 // vertical sampling for speed
+                y += yStep
             }
 
             if (top != -1) {
-                // Estimate body as the densest contiguous ~55% vertical
-                // segment of colored rows (wicks thin out toward the ends).
-                val bodyMargin = ((bottom - top) * 0.22).toInt()
-                val bodyTop = (top + bodyMargin).coerceAtMost(bottom)
-                val bodyBottom = (bottom - bodyMargin).coerceAtLeast(bodyTop)
-
-                candles.add(
-                    Candle(
-                        xCenter = x,
-                        top = top,
-                        bottom = bottom,
-                        isBullish = greenCount >= redCount,
-                        bodyTop = bodyTop,
-                        bodyBottom = bodyBottom,
-                    )
-                )
+                rawColumns.add(RawColumn(x, top, bottom, greenCount, redCount, rowColored))
             }
             x += step
         }
+
+        if (rawColumns.isEmpty()) return emptyList()
+
+        // Merge adjacent sampled columns that clearly belong to the same visual
+        // candle (close together with overlapping vertical extent) into one
+        // logical candle, using neighbor-density to find the true body band
+        // instead of a flat 22% margin guess. This keeps small/thin candles —
+        // which previously could get split into several partial "candles" or
+        // have their body boundary misjudged — as one clean, accurate unit.
+        val mergeGapPx = max(2, w / 150)
+        val groups = mutableListOf<MutableList<RawColumn>>()
+        for (col in rawColumns) {
+            val last = groups.lastOrNull()
+            if (last != null && col.x - last.last().x <= mergeGapPx) {
+                last.add(col)
+            } else {
+                groups.add(mutableListOf(col))
+            }
+        }
+
+        val candles = mutableListOf<Candle>()
+        for (group in groups) {
+            val top = group.minOf { it.top }
+            val bottom = group.maxOf { it.bottom }
+            val greenTotal = group.sumOf { it.greenCount }
+            val redTotal = group.sumOf { it.redCount }
+            val xCenter = group.sumOf { it.x } / group.size
+
+            // Density-based body detection: for each row in [top, bottom], count
+            // how many columns in this group are colored at that row. The BODY
+            // is the contiguous vertical band where most columns agree (wide,
+            // solid fill); rows where only a thin minority of columns are
+            // colored are the WICK (a single-pixel-wide line). This replaces
+            // the old flat-percentage estimate with the density check the
+            // original code comment described but never implemented.
+            val rowDensity = IntArray(bottom - top + 1)
+            for (col in group) {
+                for (yy in top..bottom) {
+                    if (yy < col.rowColored.size && col.rowColored[yy]) rowDensity[yy - top]++
+                }
+            }
+            val maxDensity = rowDensity.maxOrNull() ?: 1
+            val bodyThreshold = (maxDensity * 0.55).coerceAtLeast(1.0)
+
+            var bodyTopIdx = -1
+            var bodyBottomIdx = -1
+            for (i in rowDensity.indices) {
+                if (rowDensity[i] >= bodyThreshold) {
+                    if (bodyTopIdx == -1) bodyTopIdx = i
+                    bodyBottomIdx = i
+                }
+            }
+
+            val bodyTop: Int
+            val bodyBottom: Int
+            if (bodyTopIdx != -1) {
+                bodyTop = top + bodyTopIdx
+                bodyBottom = (top + bodyBottomIdx).coerceAtLeast(bodyTop)
+            } else {
+                // Fallback for a pure single-pixel-wide sample (no density signal
+                // at all, e.g. an isolated thin doji) — keep the old safe margin
+                // estimate rather than collapsing to a zero-size body.
+                val bodyMargin = ((bottom - top) * 0.22).toInt()
+                bodyTop = (top + bodyMargin).coerceAtMost(bottom)
+                bodyBottom = (bottom - bodyMargin).coerceAtLeast(bodyTop)
+            }
+
+            candles.add(
+                Candle(
+                    xCenter = xCenter,
+                    top = top,
+                    bottom = bottom,
+                    isBullish = greenTotal >= redTotal,
+                    bodyTop = bodyTop,
+                    bodyBottom = bodyBottom,
+                )
+            )
+        }
         return candles
     }
+
+    private data class RawColumn(
+        val x: Int,
+        val top: Int,
+        val bottom: Int,
+        val greenCount: Int,
+        val redCount: Int,
+        val rowColored: BooleanArray,
+    )
 
     private fun max(a: Int, b: Int) = if (a > b) a else b
 

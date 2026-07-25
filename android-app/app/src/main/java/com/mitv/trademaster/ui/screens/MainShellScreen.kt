@@ -100,43 +100,106 @@ fun MainShellScreen(
             NavigationBar(
                 containerColor = PanelDark,
                 contentColor = BrandSilver,
-                tonalElevation = 0.dp
+                tonalElevation = 0.dp,
+                modifier = Modifier.height(72.dp)
             ) {
                 tabs.forEach { tab ->
                     val isMore = tab == Tab.More
+                    val isAnalyzer = tab == Tab.Analyzer
                     val selected = if (isMore) (moreDestination != null) else (currentRoute == tab.route && moreDestination == null)
 
-                    NavigationBarItem(
-                        selected = selected,
-                        alwaysShowLabel = true,
-                        onClick = {
-                            tapFeedback()
-                            if (isMore) {
-                                showMoreSheet = true
-                            } else {
+                    if (isAnalyzer) {
+                        // Analyzer is the app's core feature, so it gets its own raised,
+                        // glowing center button instead of a flat tab — the same visual
+                        // language pro trading apps use for their primary action.
+                        NavigationBarItem(
+                            selected = selected,
+                            alwaysShowLabel = true,
+                            onClick = {
+                                tapFeedback()
                                 moreDestination = null
                                 navController.navigate(tab.route) {
                                     popUpTo(navController.graph.startDestinationId) { saveState = true }
                                     launchSingleTop = true
                                     restoreState = true
                                 }
-                            }
-                        },
-                        icon = { Icon(tab.icon, contentDescription = null, modifier = Modifier.size(22.dp)) },
-                        label = {
-                            Text(
-                                if (language == "ur") tab.labelUr else tab.label,
-                                fontSize = 10.sp,
-                                fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
-                                maxLines = 1
+                            },
+                            icon = {
+                                Box(
+                                    modifier = Modifier
+                                        .offset(y = (-14).dp)
+                                        .size(52.dp)
+                                        .background(
+                                            brush = androidx.compose.ui.graphics.Brush.radialGradient(
+                                                colors = if (selected)
+                                                    listOf(BrandGreen, BrandGreen.copy(alpha = 0.75f))
+                                                else
+                                                    listOf(BrandGreen.copy(alpha = 0.85f), BrandGreen.copy(alpha = 0.55f))
+                                            ),
+                                            shape = androidx.compose.foundation.shape.CircleShape
+                                        )
+                                        .then(
+                                            if (selected)
+                                                Modifier.background(BrandGreen.copy(alpha = 0.18f), androidx.compose.foundation.shape.CircleShape)
+                                            else Modifier
+                                        ),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        tab.icon,
+                                        contentDescription = null,
+                                        tint = Color.Black,
+                                        modifier = Modifier.size(26.dp)
+                                    )
+                                }
+                            },
+                            label = {
+                                Text(
+                                    if (language == "ur") tab.labelUr else tab.label,
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = BrandGreen,
+                                    maxLines = 1,
+                                    modifier = Modifier.offset(y = (-10).dp)
+                                )
+                            },
+                            colors = NavigationBarItemDefaults.colors(
+                                indicatorColor = Color.Transparent,
                             )
-                        },
-                        colors = NavigationBarItemDefaults.colors(
-                            selectedIconColor = BrandGreen, selectedTextColor = BrandGreen,
-                            unselectedIconColor = BrandSilverDim, unselectedTextColor = BrandSilverDim,
-                            indicatorColor = BrandGreen.copy(alpha = 0.12f),
                         )
-                    )
+                    } else {
+                        NavigationBarItem(
+                            selected = selected,
+                            alwaysShowLabel = true,
+                            onClick = {
+                                tapFeedback()
+                                if (isMore) {
+                                    showMoreSheet = true
+                                } else {
+                                    moreDestination = null
+                                    navController.navigate(tab.route) {
+                                        popUpTo(navController.graph.startDestinationId) { saveState = true }
+                                        launchSingleTop = true
+                                        restoreState = true
+                                    }
+                                }
+                            },
+                            icon = { Icon(tab.icon, contentDescription = null, modifier = Modifier.size(22.dp)) },
+                            label = {
+                                Text(
+                                    if (language == "ur") tab.labelUr else tab.label,
+                                    fontSize = 10.sp,
+                                    fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
+                                    maxLines = 1
+                                )
+                            },
+                            colors = NavigationBarItemDefaults.colors(
+                                selectedIconColor = BrandGreen, selectedTextColor = BrandGreen,
+                                unselectedIconColor = BrandSilverDim, unselectedTextColor = BrandSilverDim,
+                                indicatorColor = BrandGreen.copy(alpha = 0.12f),
+                            )
+                        )
+                    }
                 }
             }
         }
