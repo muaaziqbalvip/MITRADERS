@@ -1198,6 +1198,55 @@ object ChartAnalyzer {
         return (stdDev / avg).coerceIn(0.0, 2.0)
     }
 
+    /**
+     * Classifies a pixel as bullish (1), bearish (-1), or background/neither (0),
+     * using HSV hue ranges instead of a narrow "pure green vs pure red" RGB
+     * check. Real charts use many different color pairs — mint/teal-green vs
+     * coral-red (TradingView), blue vs orange, white vs black/gray (classic
+     * bar style approximated as light vs dark), or fully custom themes — so a
+     * strict RGB-channel-dominance test misses most of them and can leave an
+     * otherwise perfectly good screenshot with zero detected candles. Hue is
+     * far more stable across brightness/saturation variation than raw RGB
+     * comparisons, which is what was causing charts with anything other than
+     * saturated pure-green/pure-red to fail segmentation entirely.
+     */
+    private fun classifyCandleColor(r: Int, g: Int, b: Int): Int {
+        val max = maxOf(r, g, b)
+        val min = minOf(r, g, b)
+        val delta = max - min
+
+        // Too close to gray/black/white (background, gridlines, axis text) —
+        // not a candle color at all.
+        if (max < 45) return 0 // near-black background
+        if (delta < 18 && max > 190) return 0 // near-white background/text
+        if (delta < 12) return 0 // low-saturation gray — not a colored candle
+
+        // Hue in degrees (0-360), standard RGB->HSV conversion.
+        val hue = when (max) {
+            r -> (60 * (((g - b).toFloat() / delta) % 6) + 360) % 360
+            g -> (60 * (((b - r).toFloat() / delta) + 2) + 360) % 360
+            else -> (60 * (((r - g).toFloat() / delta) + 4) + 360) % 360
+        }
+
+        return when {
+            // Bullish band: green through teal/mint/cyan-green (approx 65°-185°)
+            // covers standard green, TradingView's mint-green, and teal themes.
+            hue in 65f..185f -> 1
+            // Bearish band: red through orange through magenta/pink-red
+            // (approx 330°-360° and 0°-40°, plus orange 15°-45° overlap and
+            // magenta/maroon reds around 320°-360°) covers standard red,
+            // coral-red, orange-red, and maroon themes.
+            hue in 0f..45f || hue in 320f..360f -> -1
+            // Blue vs orange theme: treat blue (bullish-style "up" color in
+            // some brokers) as bullish, orange as bearish, since blue/orange
+            // is a common alternate pair (e.g. some MT4/MT5 templates).
+            hue in 195f..255f -> 1
+            hue in 20f..64f && r > g -> -1
+            else -> 0
+        }
+    }
+
+
     private fun segmentCandles(bitmap: Bitmap): List<Candle> {
         val w = bitmap.width
         val h = bitmap.height
@@ -1230,14 +1279,13 @@ object ChartAnalyzer {
                 val g = (pixel shr 8) and 0xFF
                 val b = pixel and 0xFF
 
-                val isGreen = g > r + 15 && g > b + 15 && g > 60
-                val isRed = r > g + 15 && r > b + 15 && r > 60
+                val classified = classifyCandleColor(r, g, b)
 
-                if (isGreen || isRed) {
+                if (classified != 0) {
                     if (top == -1) top = y
                     bottom = y
                     rowColored[y] = true
-                    if (isGreen) greenCount++ else redCount++
+                    if (classified == 1) greenCount++ else redCount++
                 }
                 y += yStep
             }

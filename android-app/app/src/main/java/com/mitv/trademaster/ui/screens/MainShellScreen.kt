@@ -101,7 +101,8 @@ fun MainShellScreen(
                 containerColor = PanelDark,
                 contentColor = BrandSilver,
                 tonalElevation = 0.dp,
-                modifier = Modifier.height(72.dp)
+                modifier = Modifier.height(88.dp),
+                windowInsets = WindowInsets(0.dp)
             ) {
                 tabs.forEach { tab ->
                     val isMore = tab == Tab.More
@@ -127,8 +128,8 @@ fun MainShellScreen(
                             icon = {
                                 Box(
                                     modifier = Modifier
-                                        .offset(y = (-14).dp)
-                                        .size(52.dp)
+                                        .offset(y = (-10).dp)
+                                        .size(50.dp)
                                         .background(
                                             brush = androidx.compose.ui.graphics.Brush.radialGradient(
                                                 colors = if (selected)
@@ -160,7 +161,7 @@ fun MainShellScreen(
                                     fontWeight = FontWeight.Bold,
                                     color = BrandGreen,
                                     maxLines = 1,
-                                    modifier = Modifier.offset(y = (-10).dp)
+                                    modifier = Modifier.offset(y = (-6).dp)
                                 )
                             },
                             colors = NavigationBarItemDefaults.colors(
