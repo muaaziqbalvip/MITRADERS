@@ -46,6 +46,7 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.mitv.trademaster.analysis.AnnotatedChartExporter
 import com.mitv.trademaster.analysis.ChartAnalyzer
+import com.mitv.trademaster.analysis.ChartRegionDetector
 import com.mitv.trademaster.analysis.Direction
 import com.mitv.trademaster.analysis.PairNameDetector
 import com.mitv.trademaster.data.AuthRepository
@@ -74,6 +75,8 @@ fun AnalyzerScreen(language: String = "en") {
     var analyzedBitmap by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
     var exportedUri by remember { mutableStateOf<Uri?>(null) }
     var isExporting by remember { mutableStateOf(false) }
+    var previewBitmap by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
+    var isBuildingPreview by remember { mutableStateOf(false) }
 
     // While waiting for a screenshot (user just granted screen-capture
     // permission or switched away to their chart app), poll for the next
@@ -288,13 +291,25 @@ fun AnalyzerScreen(language: String = "en") {
                         if (bitmap == null) {
                             errorMsg = if (language == "ur") "تصویر نہیں پڑھی جا سکی" else "Could not read image"
                         } else {
-                            val pairName = withContext(Dispatchers.Default) { runCatching { PairNameDetector.detect(bitmap) }.getOrNull() }
+                            // Auto-crop away trading-app UI chrome (BUY/SELL buttons,
+                            // amount panels, timers, bottom nav) so both the analysis
+                            // and the exported image only ever see/show the actual
+                            // candlestick chart area.
+                            val croppedBitmap = withContext(Dispatchers.Default) {
+                                runCatching { ChartRegionDetector.cropToChartRegion(bitmap) }.getOrDefault(bitmap)
+                            }
+                            val pairName = withContext(Dispatchers.Default) { runCatching { PairNameDetector.detect(croppedBitmap) }.getOrNull() }
                             val r = withContext(Dispatchers.Default) {
-                                ChartAnalyzer.analyze(bitmap, candleInterval, tradeDuration, pairName)
+                                ChartAnalyzer.analyze(croppedBitmap, candleInterval, tradeDuration, pairName)
                             }
                             result = r
-                            analyzedBitmap = bitmap
+                            analyzedBitmap = croppedBitmap
                             exportedUri = null
+                            isBuildingPreview = true
+                            previewBitmap = withContext(Dispatchers.Default) {
+                                runCatching { AnnotatedChartExporter.buildAnnotatedBitmap(context, croppedBitmap, r) }.getOrNull()
+                            }
+                            isBuildingPreview = false
                             authRepo.currentUser?.uid?.let { uid -> scope.launch { runCatching { firestoreRepo.incrementAnalysesRun(uid) } } }
                         }
                     } catch (e: Exception) {
@@ -324,16 +339,52 @@ fun AnalyzerScreen(language: String = "en") {
             Spacer(Modifier.height(14.dp))
             IndicatorsPanel(r, language)
             Spacer(Modifier.height(14.dp))
+
+            // Full annotated report image, shown directly on screen — the
+            // same image the download button saves/shares, so the user can
+            // see exactly what they're getting before choosing to save it.
+            if (isBuildingPreview) {
+                Box(
+                    modifier = Modifier.fillMaxWidth().height(200.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator(color = BrandGreen, strokeWidth = 2.dp)
+                }
+            } else {
+                previewBitmap?.let { bmp ->
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = PanelDark),
+                        shape = RoundedCornerShape(18.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        androidx.compose.foundation.Image(
+                            bitmap = bmp.asImageBitmap(),
+                            contentDescription = "Annotated chart analysis",
+                            modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)),
+                            contentScale = ContentScale.FillWidth
+                        )
+                    }
+                    Spacer(Modifier.height(14.dp))
+                }
+            }
+
             DownloadAnalysisButton(
                 language = language,
                 isExporting = isExporting,
                 exportedUri = exportedUri,
                 onDownload = onDownload@{
                     tapFeedback()
-                    val bmp = analyzedBitmap ?: return@onDownload
+                    val bmpToSave = previewBitmap
                     isExporting = true
                     scope.launch {
-                        val uri = withContext(Dispatchers.IO) { AnnotatedChartExporter.export(context, bmp, r) }
+                        val uri = withContext(Dispatchers.IO) {
+                            if (bmpToSave != null) {
+                                runCatching { AnnotatedChartExporter.saveAndShare(context, bmpToSave) }.getOrNull()
+                            } else {
+                                val src = analyzedBitmap ?: return@withContext null
+                                AnnotatedChartExporter.export(context, src, r)
+                            }
+                        }
                         exportedUri = uri
                         isExporting = false
                         if (uri != null) {

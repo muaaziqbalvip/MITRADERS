@@ -799,25 +799,68 @@ object ChartAnalyzer {
     private fun detectMicroPatterns(candles: List<Candle>): List<String> {
         if (candles.size < 3) return emptyList()
         val notes = mutableListOf<String>()
-        val last3 = candles.takeLast(3)
+        val lastN = candles.takeLast(min(candles.size, 5))
         val avgRange = candles.takeLast(min(candles.size, 12)).map { it.range }.average().coerceAtLeast(1.0)
 
-        last3.forEachIndexed { idx, c ->
-            val label = when (idx) { 2 -> "Last candle"; 1 -> "2nd-last candle"; else -> "3rd-last candle" }
+        lastN.forEachIndexed { idx, c ->
+            val posFromEnd = lastN.size - idx
+            val label = when (posFromEnd) {
+                1 -> "Last candle"
+                2 -> "2nd-last candle"
+                3 -> "3rd-last candle"
+                4 -> "4th-last candle"
+                else -> "5th-last candle"
+            }
+
+            // Tiny wick spikes on either side (rejection wicks).
             if (c.upperWick > c.bodySize * 3 && c.bodySize > 0) {
                 notes.add("$label: tiny upper wick spike — brief rejection at the high")
             }
             if (c.lowerWick > c.bodySize * 3 && c.bodySize > 0) {
                 notes.add("$label: tiny lower wick spike — brief rejection at the low")
             }
+
+            // Pin bar: one wick is the dominant feature of the whole candle (very small body, one long wick, tiny opposite wick).
+            val bodyRatio = c.bodySize.toDouble() / c.range
+            if (bodyRatio < 0.25) {
+                if (c.lowerWick > c.range * 0.55 && c.upperWick < c.range * 0.15) {
+                    notes.add("$label: bullish pin bar — long lower wick dominates, buyers defended this level")
+                } else if (c.upperWick > c.range * 0.55 && c.lowerWick < c.range * 0.15) {
+                    notes.add("$label: bearish pin bar — long upper wick dominates, sellers defended this level")
+                }
+            }
+
+            // Near-zero body with wicks on both sides — pure indecision candle, smaller/subtler than a full Doji call.
+            if (bodyRatio < 0.08 && c.upperWick > 0 && c.lowerWick > 0 && c.range > avgRange * 0.4) {
+                notes.add("$label: near-zero body with wicks both sides — pure indecision tick")
+            }
+
+            // Micro-range candle — very low activity, barely moved.
             if (c.range < avgRange * 0.25) {
                 notes.add("$label: micro-range candle — very low activity")
             }
+
+            // Expanding-range breakout candle — noticeably bigger than the recent average, signals a possible momentum burst.
+            if (c.range > avgRange * 1.8 && posFromEnd <= 2) {
+                notes.add("$label: expanding-range candle — noticeably larger than recent average, possible momentum burst")
+            }
         }
 
-        val smallBodyCount = last3.count { it.bodySize.toDouble() / it.range < 0.2 }
-        if (smallBodyCount >= 2) {
+        // Coiling / squeeze: several small-bodied candles in a row, often precedes a bigger move.
+        val smallBodyCount = lastN.count { it.bodySize.toDouble() / it.range < 0.2 }
+        if (smallBodyCount >= 3) {
+            notes.add("Coiling/squeeze detected — several small-bodied candles in a row, often precedes a bigger move")
+        } else if (smallBodyCount >= 2) {
             notes.add("Coiling detected — multiple small-bodied candles in a row, often precedes a bigger move")
+        }
+
+        // Shrinking range across the last few candles — volatility contraction, a classic pre-breakout tell.
+        if (lastN.size >= 4) {
+            val ranges = lastN.map { it.range }
+            val isShrinking = ranges.zipWithNext().all { (a, b) -> b <= a * 1.05 } && ranges.first() > ranges.last() * 1.3
+            if (isShrinking) {
+                notes.add("Range contraction across recent candles — volatility squeezing down, often precedes a breakout")
+            }
         }
 
         return notes
