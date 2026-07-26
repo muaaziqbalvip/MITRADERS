@@ -15,7 +15,7 @@
 </p>
 
 <p>
-<img src="https://img.shields.io/badge/Version-v8.0.0-34E39A?style=for-the-badge"/>
+<img src="https://img.shields.io/badge/Version-v17.0.0-34E39A?style=for-the-badge"/>
 <img src="https://img.shields.io/badge/Android-8+-3DDC84?style=for-the-badge&logo=android&logoColor=white"/>
 <img src="https://img.shields.io/badge/Firebase-Backend-FFCA28?style=for-the-badge&logo=firebase&logoColor=black"/>
 <img src="https://img.shields.io/badge/Groq-AI-34E39A?style=for-the-badge"/>
