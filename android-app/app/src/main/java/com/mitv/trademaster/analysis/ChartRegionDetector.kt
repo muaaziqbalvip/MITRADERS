@@ -33,11 +33,12 @@ object ChartRegionDetector {
         val h = bitmap.height
         if (w < 20 || h < 20) return Rect(0, 0, w, h)
 
-        val rowStep = max(1, h / 300)
-        val colStep = max(1, w / 300)
+        val rowStep = max(1, h / 400)
+        val colStep = max(1, w / 400)
 
         // ---- Row density scan (find vertical chart band) ----
-        val rowDensity = IntArray(h)
+        val sampledYs = mutableListOf<Int>()
+        val rowDensity = mutableListOf<Int>()
         var y = 0
         while (y < h) {
             var count = 0
@@ -46,34 +47,59 @@ object ChartRegionDetector {
                 if (isCandleColored(bitmap.getPixel(x, y))) count++
                 x += colStep
             }
-            rowDensity[y] = count
+            sampledYs.add(y)
+            rowDensity.add(count)
             y += rowStep
         }
 
         val maxRowDensity = rowDensity.maxOrNull()?.coerceAtLeast(1) ?: 1
-        // A row is "part of the chart" if it has at least 8% of the peak
-        // density seen anywhere — this is generous enough to include thin
-        // upper wicks / sparse candle rows near the top of the chart, but
-        // strict enough to exclude button/toolbar rows which are typically
-        // near-zero candle-colored pixels.
-        val rowThreshold = (maxRowDensity * 0.08).toInt().coerceAtLeast(1)
+        // A row only counts as "chart" if it has a real amount of candle
+        // color — 22% of peak density. This is strict enough that a stray
+        // green logo/badge/button (a handful of colored pixels) in the
+        // header or footer can't drag the detected region out to cover
+        // them; a genuine candlestick row is densely packed with color
+        // across many columns, not a sparse handful of pixels.
+        val rowThreshold = (maxRowDensity * 0.22).toInt().coerceAtLeast(2)
 
-        var chartTop = -1
-        var chartBottom = -1
-        y = 0
-        while (y < h) {
-            if (rowDensity[y] >= rowThreshold) {
-                if (chartTop == -1) chartTop = y
-                chartBottom = y
+        // Find every contiguous run of rows that clears the threshold, then
+        // keep only the LARGEST run. UI chrome (a logo here, a badge there)
+        // tends to produce small, scattered, non-contiguous hits; the real
+        // chart is one tall, unbroken band. Picking the biggest contiguous
+        // run — rather than the union of every hit from top to bottom — is
+        // what actually excludes scattered header/footer color instead of
+        // stretching the crop to include them.
+        var bestRunStart = -1
+        var bestRunEnd = -1
+        var curRunStart = -1
+        for (i in rowDensity.indices) {
+            if (rowDensity[i] >= rowThreshold) {
+                if (curRunStart == -1) curRunStart = i
+            } else {
+                if (curRunStart != -1) {
+                    if (bestRunStart == -1 || (i - 1 - curRunStart) > (bestRunEnd - bestRunStart)) {
+                        bestRunStart = curRunStart
+                        bestRunEnd = i - 1
+                    }
+                    curRunStart = -1
+                }
             }
-            y += rowStep
+        }
+        if (curRunStart != -1) {
+            val end = rowDensity.size - 1
+            if (bestRunStart == -1 || (end - curRunStart) > (bestRunEnd - bestRunStart)) {
+                bestRunStart = curRunStart
+                bestRunEnd = end
+            }
         }
 
-        if (chartTop == -1) {
+        if (bestRunStart == -1) {
             // No confident candle band found — fall back to the full image
             // rather than guessing, so we never crop out real content.
             return Rect(0, 0, w, h)
         }
+
+        var chartTop = sampledYs[bestRunStart]
+        var chartBottom = sampledYs[bestRunEnd]
 
         // Small safety margins so we don't clip the tips of tall wicks
         // right at the detected edge.
@@ -95,7 +121,7 @@ object ChartRegionDetector {
             x += colStep
         }
         val maxColDensity = colDensity.maxOrNull()?.coerceAtLeast(1) ?: 1
-        val colThreshold = (maxColDensity * 0.04).toInt().coerceAtLeast(1)
+        val colThreshold = (maxColDensity * 0.03).toInt().coerceAtLeast(1)
 
         var chartLeft = -1
         var chartRight = -1
@@ -117,7 +143,7 @@ object ChartRegionDetector {
         // something implausibly small, prefer the full image.
         val detectedH = chartBottom - chartTop
         val detectedW = chartRight - chartLeft
-        if (detectedH < h * 0.25 || detectedW < w * 0.5) {
+        if (detectedH < h * 0.15 || detectedW < w * 0.4) {
             return Rect(0, 0, w, h)
         }
 
